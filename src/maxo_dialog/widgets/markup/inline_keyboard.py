@@ -1,4 +1,3 @@
-from maxo.types import InlineKeyboardMarkup
 from maxo_dialog import DialogManager
 from maxo_dialog.api.internal.widgets import (
     MarkupFactory,
@@ -17,6 +16,4 @@ class InlineKeyboardFactory(MarkupFactory):
     ) -> MarkupVariant:
         # TODO validate buttons
         add_intent_id(keyboard, manager.current_context().id)
-        return InlineKeyboardMarkup(
-            inline_keyboard=keyboard,
-        )
+        return keyboard

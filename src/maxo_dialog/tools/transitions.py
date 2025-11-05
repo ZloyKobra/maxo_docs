@@ -1,12 +1,12 @@
 import os.path
 from collections.abc import Iterable, Sequence
+from typing import TYPE_CHECKING
 
 from diagrams import Cluster, Diagram, Edge
 from diagrams.custom import Custom
 
-from maxo import Router
 from maxo.fsm import State
-from maxo_dialog import Dialog
+from maxo.routing.interfaces import Router
 from maxo_dialog.api.internal import WindowProtocol
 from maxo_dialog.setup import collect_dialogs
 from maxo_dialog.widgets.kbd import (
@@ -17,6 +17,9 @@ from maxo_dialog.widgets.kbd import (
     Start,
     SwitchTo,
 )
+
+if TYPE_CHECKING:
+    from maxo_dialog import Dialog
 
 ICON_PATH = os.path.join(os.path.dirname(__file__), "calculator.png")
 
@@ -70,7 +73,7 @@ def find_starts(
 
 def render_window(
     nodes: dict,
-    dialog: Dialog,
+    dialog: "Dialog",
     starts: list[tuple[State, State]],
     window: WindowProtocol,
 ):

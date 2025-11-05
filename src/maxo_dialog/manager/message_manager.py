@@ -4,19 +4,18 @@ from typing import Optional, Union
 from maxo import Bot
 from maxo.enums import AttachmentType
 from maxo.errors import MaxBotApiError, MaxBotBadRequestError
+from maxo.tools.upload_media import FSInputFile, InputFile
 from maxo.types import (
     Callback,
-    FSInputFile,
-    InputFile,
-    InputMediaAnimation,
-    InputMediaAudio,
-    InputMediaDocument,
-    InputMediaPhoto,
-    InputMediaVideo,
+    # InputMediaAnimation,
+    # InputMediaAudio,
+    # InputMediaDocument,
+    # InputMediaPhoto,
+    # InputMediaVideo,
     Message,
-    ReplyKeyboardMarkup,
-    ReplyKeyboardRemove,
-    URLInputFile,
+    # ReplyKeyboardMarkup,
+    # ReplyKeyboardRemove,
+    # URLInputFile,
 )
 from maxo_dialog.api.entities import (
     MediaAttachment,
@@ -34,24 +33,14 @@ from maxo_dialog.utils import get_media_id
 logger = getLogger(__name__)
 
 SEND_METHODS = {
-    AttachmentType.ANIMATION: "send_animation",
     AttachmentType.AUDIO: "send_audio",
-    AttachmentType.DOCUMENT: "send_document",
     AttachmentType.IMAGE: "send_photo",
     AttachmentType.VIDEO: "send_video",
-    AttachmentType.VIDEO_NOTE: "send_video_note",
-    AttachmentType.DICE: "send_dice",
     AttachmentType.STICKER: "send_sticker",
     AttachmentType.VOICE: "send_voice",
 }
 
-INPUT_MEDIA_TYPES = {
-    AttachmentType.ANIMATION: InputMediaAnimation,
-    AttachmentType.DOCUMENT: InputMediaDocument,
-    AttachmentType.AUDIO: InputMediaAudio,
-    AttachmentType.IMAGE: InputMediaPhoto,
-    AttachmentType.VIDEO: InputMediaVideo,
-}
+INPUT_MEDIA_TYPES = {}
 
 _INVALID_QUERY_ID_MSG = (
     "query is too old and response timeout expired or query id is invalid"

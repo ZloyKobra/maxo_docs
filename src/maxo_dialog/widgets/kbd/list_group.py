@@ -1,3 +1,4 @@
+import dataclasses
 from collections.abc import Callable
 from typing import Any, Optional, Union
 
@@ -87,11 +88,7 @@ class ListGroup(Keyboard):
         manager: DialogManager,
     ) -> bool:
         item_id, callback_data = data.split(":", maxsplit=1)
-        callback = callback.model_copy(
-            update={
-                "data": callback_data,
-            }
-        )
+        callback = dataclasses.replace(callback, payload=callback_data)
         sub_manager = SubManager(
             widget=self,
             manager=manager,

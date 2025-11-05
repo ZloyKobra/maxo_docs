@@ -261,7 +261,7 @@ class IntentMiddlewareFactory:
         if callback_data:
             query = ReplyCallback(
                 id="",
-                message=InaccessibleBusinessMessage(
+                message=Message(
                     chat=event.chat,
                     message_id=event.message_id,
                 ),
@@ -390,7 +390,7 @@ class IntentErrorMiddleware(BaseMiddleware):
 
     def _is_error_supported(
         self,
-        event: ErrorEvent,
+        event: ExceptionEvent,
         data: dict[str, Any],
     ) -> bool:
         if isinstance(event, InvalidStackIdError):
@@ -441,10 +441,10 @@ class IntentErrorMiddleware(BaseMiddleware):
     async def __call__(
         self,
         handler: Callable[
-            [ErrorEvent, dict[str, Any]],
+            [ExceptionEvent, dict[str, Any]],
             Awaitable[Any],
         ],
-        event: ErrorEvent,
+        event: ExceptionEvent,
         data: dict[str, Any],
     ) -> Any:
         error = event.exception

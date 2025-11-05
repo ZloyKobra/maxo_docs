@@ -1,6 +1,6 @@
 from typing import Any
 
-from maxo.types import CopyTextButton, InlineKeyboardButton
+from maxo.types import CallbackKeyboardButton
 from maxo_dialog import DialogManager
 from maxo_dialog.api.internal import RawKeyboard
 from maxo_dialog.widgets.common import WhenCondition
@@ -26,7 +26,7 @@ class CopyText(Keyboard):
     ) -> RawKeyboard:
         return [
             [
-                InlineKeyboardButton(
+                CallbackKeyboardButton(
                     text=await self._text.render_text(data, manager),
                     copy_text=CopyTextButton(
                         text=await self._copy_text.render_text(data, manager),

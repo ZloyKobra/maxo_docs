@@ -2,7 +2,7 @@ from abc import ABC
 from enum import Enum
 from typing import Optional, TypedDict, Union
 
-from maxo.types import Callback, InlineKeyboardButton
+from maxo.types import Callback, CallbackKeyboardButton
 from maxo_dialog.api.internal import RawKeyboard
 from maxo_dialog.api.protocols import DialogManager, DialogProtocol
 from maxo_dialog.widgets.common import ManagedScroll, Scroll, WhenCondition
@@ -150,9 +150,9 @@ class SwitchPage(BasePager):
     ) -> RawKeyboard:
         return [
             [
-                InlineKeyboardButton(
+                CallbackKeyboardButton(
                     text=await self.text.render_text(data, manager),
-                    callback_data=self._item_callback_data(data["target_page"]),
+                    payload=self._item_callback_data(data["target_page"]),
                 ),
             ]
         ]
@@ -319,9 +319,9 @@ class NumberedPager(BasePager):
                 text_widget = self.page_text
             text = await text_widget.render_text(button_data, manager)
             buttons.append(
-                InlineKeyboardButton(
+                CallbackKeyboardButton(
                     text=text,
-                    callback_data=self._item_callback_data(target_page),
+                    payload=self._item_callback_data(target_page),
                 )
             )
         if buttons:

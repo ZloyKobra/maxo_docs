@@ -5,7 +5,7 @@ from maxo.enums import TextFormat
 from maxo.omit import Omittable, Omitted
 from maxo.tools.facades.methods.base import BaseMethodsFacade
 from maxo.tools.helpers.calculating import calculate_chat_id_and_user_id
-from maxo.tools.upload_media import UploadMedia
+from maxo.tools.upload_media import InputFile
 from maxo.types.inline_keyboard_attachment_request import (
     InlineKeyboardAttachmentRequest,
 )
@@ -30,7 +30,7 @@ class SendMessageFacade(BaseMethodsFacade):
         disable_link_preview: Omittable[bool] = Omitted(),
         # Attachments
         keyboard: Sequence[Sequence[KeyboardButtons]] | None = None,
-        media: Sequence[UploadMedia | MediaAttachmentsRequests] | None = None,
+        media: Sequence[InputFile | MediaAttachmentsRequests] | None = None,
     ) -> Message:
         recipient = self.message.recipient
         chat_id, user_id = calculate_chat_id_and_user_id(

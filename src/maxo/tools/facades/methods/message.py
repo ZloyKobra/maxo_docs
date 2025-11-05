@@ -8,7 +8,7 @@ from maxo.omit import Omittable, Omitted
 from maxo.tools.facades.methods.base import BaseMethodsFacade
 from maxo.tools.facades.methods.upload_media import UploadMediaFacade
 from maxo.tools.helpers.calculating import calculate_chat_id_and_user_id
-from maxo.tools.upload_media import UploadMedia
+from maxo.tools.upload_media import InputFile
 from maxo.types.inline_keyboard_attachment_request import (
     InlineKeyboardAttachmentRequest,
 )
@@ -40,7 +40,7 @@ class MessageMethodsFacade(BaseMethodsFacade, ABC):
         disable_link_preview: Omittable[bool] = Omitted(),
         attachments: Sequence[AttachmentsRequests] | None = None,
         keyboard: Sequence[Sequence[KeyboardButtons]] | None = None,
-        media: Sequence[UploadMedia] | None = None,
+        media: Sequence[InputFile] | None = None,
     ) -> Message:
         recipient = self.message.recipient
         chat_id, user_id = calculate_chat_id_and_user_id(
@@ -101,14 +101,14 @@ class MessageMethodsFacade(BaseMethodsFacade, ABC):
 
     async def send_media(
         self,
-        media: UploadMedia | Sequence[UploadMedia],
+        media: InputFile | Sequence[InputFile],
         text: str | None = None,
         keyboard: Sequence[Sequence[KeyboardButtons]] | None = None,
         notify: Omittable[bool] = True,
         format: TextFormat | None = None,
         disable_link_preview: Omittable[bool] = Omitted(),
     ) -> Message:
-        if isinstance(media, UploadMedia):
+        if isinstance(media, InputFile):
             media = (media,)
 
         return await self.send_message(
@@ -131,7 +131,7 @@ class MessageMethodsFacade(BaseMethodsFacade, ABC):
         self,
         base: Sequence[AttachmentsRequests],
         keyboard: Sequence[Sequence[KeyboardButtons]] | None = None,
-        media: Sequence[UploadMedia] | None = None,
+        media: Sequence[InputFile] | None = None,
     ) -> Sequence[AttachmentsRequests]:
         attachments = list(base)
 
@@ -149,7 +149,7 @@ class MessageMethodsFacade(BaseMethodsFacade, ABC):
 
     async def _build_media_attachments(
         self,
-        media: Sequence[UploadMedia],
+        media: Sequence[InputFile],
     ) -> Sequence[MediaAttachmentsRequests]:
         attachments: list[MediaAttachmentsRequests] = []
 
@@ -167,6 +167,6 @@ class MessageMethodsFacade(BaseMethodsFacade, ABC):
 
         return attachments
 
-    async def _upload_media(self, media: UploadMedia) -> tuple[UploadType, str]:
+    async def _upload_media(self, media: InputFile) -> tuple[UploadType, str]:
         token = await UploadMediaFacade(self.bot, media).upload()
         return media.type, token.last_token

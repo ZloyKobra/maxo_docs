@@ -3,10 +3,8 @@ from typing import Optional, Union
 
 from maxo.types import (
     Callback,
-    InlineKeyboardButton,
-    LoginUrl,
-    SwitchInlineQueryChosenChat,
-    WebAppInfo,
+    CallbackKeyboardButton,
+    # WebAppInfo,
 )
 from maxo_dialog.api.internal import RawKeyboard
 from maxo_dialog.api.protocols import DialogManager, DialogProtocol
@@ -50,9 +48,9 @@ class Button(Keyboard):
     ) -> RawKeyboard:
         return [
             [
-                InlineKeyboardButton(
+                CallbackKeyboardButton(
                     text=await self.text.render_text(data, manager),
-                    callback_data=self._own_callback_data(),
+                    payload=self._own_callback_data(),
                 ),
             ],
         ]
@@ -77,7 +75,7 @@ class Url(Keyboard):
     ) -> RawKeyboard:
         return [
             [
-                InlineKeyboardButton(
+                CallbackKeyboardButton(
                     text=await self.text.render_text(data, manager),
                     url=await self.url.render_text(data, manager),
                 ),
@@ -90,13 +88,13 @@ class WebApp(Url):
         self,
         data: dict,
         manager: DialogManager,
-    ) -> list[list[InlineKeyboardButton]]:
+    ) -> list[list[CallbackKeyboardButton]]:
         text = await self.text.render_text(data, manager)
 
         web_app_url = await self.url.render_text(data, manager)
         web_app_info = WebAppInfo(url=web_app_url)
 
-        return [[InlineKeyboardButton(text=text, web_app=web_app_info)]]
+        return [[CallbackKeyboardButton(text=text, web_app=web_app_info)]]
 
 
 class SwitchInlineQuery(Keyboard):
@@ -115,10 +113,10 @@ class SwitchInlineQuery(Keyboard):
         self,
         data: dict,
         manager: DialogManager,
-    ) -> list[list[InlineKeyboardButton]]:
+    ) -> list[list[CallbackKeyboardButton]]:
         return [
             [
-                InlineKeyboardButton(
+                CallbackKeyboardButton(
                     text=await self.text.render_text(data, manager),
                     switch_inline_query=await self.switch_inline.render_text(
                         data,
@@ -172,7 +170,7 @@ class LoginURLButton(Keyboard):
 
         return [
             [
-                InlineKeyboardButton(
+                CallbackKeyboardButton(
                     text=text,
                     login_url=login_url,
                 ),
@@ -205,7 +203,7 @@ class SwitchInlineQueryCurrentChat(Keyboard):
 
         return [
             [
-                InlineKeyboardButton(
+                CallbackKeyboardButton(
                     text=text,
                     switch_inline_query_current_chat=query,
                 ),
@@ -251,7 +249,7 @@ class SwitchInlineQueryChosenChatButton(Keyboard):
 
         return [
             [
-                InlineKeyboardButton(
+                CallbackKeyboardButton(
                     text=text,
                     switch_inline_query_chosen_chat=switch_inline_query_chosen_chat,
                 ),

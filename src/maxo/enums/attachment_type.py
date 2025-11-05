@@ -13,3 +13,4 @@ class AttachmentType(StrEnum):
     LOCATION = "location"
 
     VOICE = AUDIO
+    ANY = "any"

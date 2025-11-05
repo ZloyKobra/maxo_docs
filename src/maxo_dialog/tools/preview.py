@@ -2,26 +2,15 @@ import html
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 from jinja2 import Environment, PackageLoader, select_autoescape
 
-from maxo import (
-    AttachmentType,
-    InlineKeyboardMarkup,
-    Message,
-    ReplyKeyboardMarkup,
-)
+from maxo.enums import AttachmentType
 from maxo.fsm import State, StatesGroup
 from maxo.routing.interfaces import Router
-from maxo.types.api import Callback, Chat, User
+from maxo.types import Callback, CallbackKeyboardButton, Chat, User
 from maxo.types.message import Message
-from maxo_dialog import (
-    BaseDialogManager,
-    Dialog,
-    DialogManager,
-    DialogProtocol,
-)
 from maxo_dialog.api.entities import (
     EVENT_CONTEXT_KEY,
     AccessSettings,
@@ -39,8 +28,13 @@ from maxo_dialog.api.entities import (
 )
 from maxo_dialog.api.exceptions import NoContextError
 from maxo_dialog.api.protocols import UnsetId
+from maxo_dialog.api.protocols.dialog import DialogProtocol
+from maxo_dialog.api.protocols.manager import BaseDialogManager, DialogManager
 from maxo_dialog.setup import collect_dialogs
 from maxo_dialog.utils import split_reply_callback
+
+if TYPE_CHECKING:
+    from maxo_dialog.dialog import Dialog
 
 
 @dataclass
@@ -68,7 +62,6 @@ class RenderDialog:
 
 
 class FakeManager(DialogManager):
-
     def __init__(self):
         self._event = DialogUpdateEvent(
             from_user=User(
@@ -82,8 +75,6 @@ class FakeManager(DialogManager):
             data={},
             intent_id=None,
             stack_id=None,
-            thread_id=None,
-            business_connection_id=None,
         )
         self._context: Optional[Context] = None
         self._dialog: Optional[DialogProtocol] = None
@@ -93,10 +84,8 @@ class FakeManager(DialogManager):
             "event_from_user": self._event.from_user,
             EVENT_CONTEXT_KEY: EventContext(
                 bot=None,
-                thread_id=None,
                 chat=self._event.chat,
                 user=self._event.from_user,
-                business_connection_id=None,
             ),
         }
 
@@ -143,11 +132,11 @@ class FakeManager(DialogManager):
     async def reset_stack(self, remove_keyboard: bool = True) -> None:
         self.reset_context()
 
-    def set_dialog(self, dialog: Dialog):
+    def set_dialog(self, dialog: "Dialog") -> None:
         self._dialog = dialog
         self.reset_context()
 
-    def set_state(self, state: State):
+    def set_state(self, state: State) -> None:
         self.current_context().state = state
 
     def is_preview(self) -> bool:
@@ -270,7 +259,7 @@ async def create_button(
     callback: str,
     manager: FakeManager,
     state: State,
-    dialog: Dialog,
+    dialog: "Dialog",
     simulate_events: bool,
 ) -> RenderButton:
     if not simulate_events:
@@ -293,7 +282,7 @@ async def create_button(
 async def render_input(
     manager: FakeManager,
     state: State,
-    dialog: Dialog,
+    dialog: "Dialog",
     content_type: str,
     simulate_events: bool,
 ) -> Optional[RenderButton]:
@@ -331,9 +320,9 @@ async def render_input(
 
 async def render_inline_keyboard(
     state: State,
-    reply_markup: InlineKeyboardMarkup,
+    reply_markup: list[list[CallbackKeyboardButton]],
     manager: FakeManager,
-    dialog: Dialog,
+    dialog: "Dialog",
     simulate_events: bool,
 ):
     return [
@@ -348,20 +337,20 @@ async def render_inline_keyboard(
             )
             for button in row
         ]
-        for row in reply_markup.inline_keyboard
+        for row in reply_markup
     ]
 
 
 async def render_reply_keyboard(
     state: State,
-    reply_markup: ReplyKeyboardMarkup,
+    reply_markup: list[list[CallbackKeyboardButton]],
     manager: FakeManager,
-    dialog: Dialog,
+    dialog: "Dialog",
     simulate_events: bool,
 ):
     # TODO simulate events using keyboard
     keyboard = []
-    for row in reply_markup.keyboard:
+    for row in reply_markup:
         keyboard_row = []
         for button in row:
             text, data = split_reply_callback(button.text)
@@ -383,7 +372,7 @@ async def create_window(
     state: State,
     message: NewMessage,
     manager: FakeManager,
-    dialog: Dialog,
+    dialog: "Dialog",
     simulate_events: bool,
 ) -> RenderWindow:
     if message.parse_mode is None or message.parse_mode == "None":
@@ -391,7 +380,7 @@ async def create_window(
     else:
         text = message.text
 
-    if isinstance(message.reply_markup, InlineKeyboardMarkup):
+    if isinstance(message.reply_markup, CallbackKeyboardButton):
         keyboard = await render_inline_keyboard(
             state,
             message.reply_markup,
@@ -400,15 +389,15 @@ async def create_window(
             simulate_events,
         )
         reply_keyboard = []
-    elif isinstance(message.reply_markup, ReplyKeyboardMarkup):
-        keyboard = []
-        reply_keyboard = await render_reply_keyboard(
-            state,
-            message.reply_markup,
-            manager,
-            dialog,
-            simulate_events,
-        )
+    # elif isinstance(message.reply_markup, ReplyKeyboardMarkup):
+    #     keyboard = []
+    #     reply_keyboard = await render_reply_keyboard(
+    #         state,
+    #         message.reply_markup,
+    #         manager,
+    #         dialog,
+    #         simulate_events,
+    #     )
     else:
         keyboard = []
         reply_keyboard = []
@@ -440,7 +429,7 @@ async def create_window(
 async def render_dialog(
     manager: FakeManager,
     group: type[StatesGroup],
-    dialog: Dialog,
+    dialog: "Dialog",
     simulate_events: bool,
 ) -> RenderDialog:
     manager.set_dialog(dialog)

@@ -2,15 +2,17 @@ from abc import abstractmethod
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Any, Optional, Union
 
-from maxo.dispatcher.event.handler import FilterObject
+from magic_filter import F
+
 from maxo.enums import AttachmentType
-from maxo.integrations.magic_filter import F
+from maxo.integrations.magic_filter import MagicFilter
 from maxo.types import Message
 from maxo_dialog.api.internal import InputWidget
 from maxo_dialog.api.protocols import (
     DialogManager,
     DialogProtocol,
 )
+from maxo_dialog.tools.filter_object import FilterObject
 from maxo_dialog.widgets.common import Actionable
 from maxo_dialog.widgets.widget_event import (
     WidgetEventProcessor,
@@ -48,9 +50,11 @@ class MessageInput(BaseInput):
         filters = []
         if isinstance(content_types, str):
             if content_types != AttachmentType.ANY:
-                filters.append(FilterObject(F.content_type == content_types))
+                filters.append(
+                    FilterObject(MagicFilter(F.content_type == content_types))
+                )
         elif AttachmentType.ANY not in content_types:
-            filters.append(FilterObject(F.content_type.in_(content_types)))
+            filters.append(FilterObject(MagicFilter(F.content_type.in_(content_types))))
         if filter is not None:
             filters.append(FilterObject(filter))
         self.filters = filters

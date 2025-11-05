@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from typing import Optional, Union
 
-from maxo.types import KeyboardButton, KeyboardButtonPollType
+from maxo.types import CallbackKeyboardButton, MessageKeyboardButton
 from maxo_dialog.api.internal import RawKeyboard
 from maxo_dialog.api.protocols import DialogManager
 from maxo_dialog.widgets.text import Text
@@ -25,7 +25,7 @@ class RequestContact(Keyboard):
     ) -> RawKeyboard:
         return [
             [
-                KeyboardButton(
+                MessageKeyboardButton(
                     text=await self.text.render_text(data, manager),
                     request_contact=True,
                 ),
@@ -49,7 +49,7 @@ class RequestLocation(Keyboard):
     ) -> RawKeyboard:
         return [
             [
-                KeyboardButton(
+                MessageKeyboardButton(
                     text=await self.text.render_text(data, manager),
                     request_location=True,
                 ),
@@ -74,11 +74,11 @@ class RequestPoll(Keyboard):
         manager: DialogManager,
     ) -> RawKeyboard:
         text = await self.text.render_text(data, manager)
-        request_poll = KeyboardButtonPollType(type=self.poll_type)
+        request_poll = CallbackKeyboardButton(type=self.poll_type)
 
         return [
             [
-                KeyboardButton(
+                MessageKeyboardButton(
                     text=text,
                     request_poll=request_poll,
                 ),

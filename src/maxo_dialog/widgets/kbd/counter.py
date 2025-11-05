@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from typing import Optional, Protocol, Union
 
-from maxo.types import Callback, InlineKeyboardButton
+from maxo.types import Callback, CallbackKeyboardButton
 from maxo_dialog.api.entities import ChatEvent
 from maxo_dialog.api.internal import RawKeyboard
 from maxo_dialog.api.protocols import DialogManager, DialogProtocol
@@ -109,9 +109,9 @@ class Counter(Keyboard):
         if self.minus:
             minus = await self.minus.render_text(data, manager)
             row.append(
-                InlineKeyboardButton(
+                CallbackKeyboardButton(
                     text=minus,
-                    callback_data=self._item_callback_data("-"),
+                    payload=self._item_callback_data("-"),
                 ),
             )
         if self.text:
@@ -120,17 +120,17 @@ class Counter(Keyboard):
                 manager,
             )
             row.append(
-                InlineKeyboardButton(
+                CallbackKeyboardButton(
                     text=text,
-                    callback_data=self._item_callback_data(""),
+                    payload=self._item_callback_data(""),
                 ),
             )
         if self.plus:
             plus = await self.plus.render_text(data, manager)
             row.append(
-                InlineKeyboardButton(
+                CallbackKeyboardButton(
                     text=plus,
-                    callback_data=self._item_callback_data("+"),
+                    payload=self._item_callback_data("+"),
                 ),
             )
         return [row]

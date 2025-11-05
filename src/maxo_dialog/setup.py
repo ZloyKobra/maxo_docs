@@ -34,7 +34,6 @@ from maxo_dialog.manager.manager_middleware import (
 from maxo_dialog.manager.message_manager import MessageManager
 from maxo_dialog.manager.update_handler import handle_update
 
-from .about import about_dialog
 from .context.access_validator import DefaultAccessValidator
 
 
@@ -117,10 +116,10 @@ def _register_middleware(
         events_isolation=events_isolation,
     )
     # delayed configuration of middlewares
-    router.startup.register(_startup_callback(registry))
+    router.after_startup.handler(_startup_callback(registry))
     update_handler = router.observers[DIALOG_EVENT_NAME]
 
-    router.errors.middleware(
+    router.exception.middleware.inner(
         IntentErrorMiddleware(
             registry=registry,
             events_isolation=events_isolation,
@@ -128,40 +127,32 @@ def _register_middleware(
         )
     )
 
-    router.message.middleware(manager_middleware)
-    router.business_message.middleware(manager_middleware)
-    router.callback_query.middleware(manager_middleware)
-    update_handler.middleware(manager_middleware)
-    router.my_chat_member.middleware(manager_middleware)
-    router.chat_join_request.middleware(manager_middleware)
-    router.errors.middleware(manager_middleware)
+    router.message_created.middleware.inner(manager_middleware)
+    router.message_callback.middleware.inner(manager_middleware)
+    update_handler.middleware.inner(manager_middleware)
+    router.bot_added.middleware.inner(manager_middleware)
+    router.bot_removed.middleware.inner(manager_middleware)
+    router.exception.middleware.inner(manager_middleware)
 
-    router.message.outer_middleware(intent_middleware.process_message)
-    router.business_message.outer_middleware(intent_middleware.process_message)
-    router.callback_query.outer_middleware(
-        intent_middleware.process_callback_query,
-    )
-    update_handler.outer_middleware(
-        intent_middleware.process_aiogd_update,
-    )
+    router.message_created.middleware.outer(intent_middleware.process_message)
+    router.message_callback.middleware.outer(intent_middleware.process_callback_query)
+    update_handler.middleware.outer(intent_middleware.process_aiogd_update)
 
-    router.message.outer_middleware(context_unlocker_middleware)
-    router.business_message.outer_middleware(context_unlocker_middleware)
-    router.callback_query.outer_middleware(context_unlocker_middleware)
-    update_handler.outer_middleware(context_unlocker_middleware)
-    router.my_chat_member.outer_middleware(context_unlocker_middleware)
-    router.chat_join_request.outer_middleware(context_unlocker_middleware)
+    router.message_created.middleware.outer(context_unlocker_middleware)
+    router.message_callback.middleware.outer(context_unlocker_middleware)
+    update_handler.middleware.outer(context_unlocker_middleware)
+    router.bot_added.middleware.inner(manager_middleware)
+    router.bot_removed.middleware.inner(manager_middleware)
 
-    router.message.middleware(context_saver_middleware)
-    router.business_message.middleware(context_saver_middleware)
-    router.callback_query.middleware(context_saver_middleware)
-    update_handler.middleware(context_saver_middleware)
-    router.my_chat_member.middleware(context_saver_middleware)
-    router.chat_join_request.middleware(context_saver_middleware)
+    router.message_created.middleware.inner(context_saver_middleware)
+    router.message_callback.middleware.inner(context_saver_middleware)
+    update_handler.middleware.inner(context_saver_middleware)
+    router.bot_added.middleware.inner(manager_middleware)
+    router.bot_removed.middleware.inner(manager_middleware)
 
     bg_factory_middleware = BgFactoryMiddleware(bg_manager_factory)
     for observer in router.observers.values():
-        observer.outer_middleware(bg_factory_middleware)
+        observer.middleware.outer(bg_factory_middleware)
 
 
 def _prepare_dialog_manager_factory(
@@ -206,10 +197,6 @@ def collect_dialogs(router: Router) -> Iterable[DialogProtocol]:
         yield from collect_dialogs(sub_router)
 
 
-def _include_default_dialogs(router: SimpleRouter) -> None:
-    router.include(about_dialog())
-
-
 def setup_dialogs(
     router: SimpleRouter,
     *,
@@ -221,7 +208,6 @@ def setup_dialogs(
 ) -> BgManagerFactory:
     _setup_event_observer(router)
     _register_event_handler(router, handle_update)
-    _include_default_dialogs(router)
 
     dialog_manager_factory = _prepare_dialog_manager_factory(
         dialog_manager_factory=dialog_manager_factory,

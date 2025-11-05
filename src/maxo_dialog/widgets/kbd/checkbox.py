@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
 from typing import Optional, Union
 
-from maxo.types import Callback, InlineKeyboardButton
+from maxo.types import Callback, CallbackKeyboardButton
 from maxo_dialog.api.entities import ChatEvent
 from maxo_dialog.api.internal import RawKeyboard
 from maxo_dialog.api.protocols import DialogManager, DialogProtocol
@@ -53,9 +53,9 @@ class BaseCheckbox(Keyboard, ABC):
         # store current checked status in callback data
         return [
             [
-                InlineKeyboardButton(
+                CallbackKeyboardButton(
                     text=await self.text.render_text(data, manager),
-                    callback_data=self._item_callback_data(checked),
+                    payload=self._item_callback_data(checked),
                 ),
             ],
         ]

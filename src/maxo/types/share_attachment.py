@@ -1,3 +1,4 @@
+from dataclasses import field
 from typing import Self
 
 from maxo.enums.attachment_type import AttachmentType
@@ -9,7 +10,7 @@ from maxo.types.share_attachment_payload import ShareAttachmentPayload
 class ShareAttachment(MaxoType):
     type = AttachmentType.SHARE
 
-    payload: ShareAttachmentPayload = ShareAttachmentPayload()
+    payload: ShareAttachmentPayload = field(default_factory=ShareAttachmentPayload)
     title: Omittable[str | None] = Omitted()
     description: Omittable[str | None] = Omitted()
     image_url: Omittable[str | None] = Omitted()

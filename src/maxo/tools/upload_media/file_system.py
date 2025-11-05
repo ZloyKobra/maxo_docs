@@ -4,10 +4,10 @@ from pathlib import Path
 from anyio import open_file
 
 from maxo.enums import UploadType
-from maxo.tools.upload_media.base import UploadMedia
+from maxo.tools.upload_media.base import InputFile
 
 
-class FSUploadMedia(UploadMedia):
+class FSInputFile(InputFile):
     __slots__ = (
         "_file_name",
         "_path",
@@ -36,19 +36,19 @@ class FSUploadMedia(UploadMedia):
         return self._file_name
 
     @classmethod
-    def image(cls, path: str | Path, file_name: str | None = None) -> "FSUploadMedia":
+    def image(cls, path: str | Path, file_name: str | None = None) -> "FSInputFile":
         return cls(path=path, file_name=file_name, type=UploadType.IMAGE)
 
     @classmethod
-    def video(cls, path: str | Path, file_name: str | None = None) -> "FSUploadMedia":
+    def video(cls, path: str | Path, file_name: str | None = None) -> "FSInputFile":
         return cls(path=path, file_name=file_name, type=UploadType.VIDEO)
 
     @classmethod
-    def audio(cls, path: str | Path, file_name: str | None = None) -> "FSUploadMedia":
+    def audio(cls, path: str | Path, file_name: str | None = None) -> "FSInputFile":
         return cls(path=path, file_name=file_name, type=UploadType.AUDIO)
 
     @classmethod
-    def file(cls, path: str | Path, file_name: str | None = None) -> "FSUploadMedia":
+    def file(cls, path: str | Path, file_name: str | None = None) -> "FSInputFile":
         return cls(path=path, file_name=file_name, type=UploadType.FILE)
 
     async def read(self) -> bytes:

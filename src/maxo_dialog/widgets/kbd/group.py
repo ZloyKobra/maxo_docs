@@ -2,7 +2,7 @@ from collections.abc import Iterable
 from itertools import chain
 from typing import Optional
 
-from maxo.types import Callback, InlineKeyboardButton
+from maxo.types import Callback, CallbackKeyboardButton
 from maxo_dialog.api.internal import ButtonVariant, RawKeyboard
 from maxo_dialog.api.protocols import DialogManager, DialogProtocol
 from maxo_dialog.widgets.common import WhenCondition
@@ -52,7 +52,7 @@ class Group(Keyboard):
 
     def _wrap_kbd(
         self,
-        kbd: Iterable[InlineKeyboardButton],
+        kbd: Iterable[CallbackKeyboardButton],
     ) -> RawKeyboard:
         res: RawKeyboard = []
         row: list[ButtonVariant] = []

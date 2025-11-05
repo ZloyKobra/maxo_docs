@@ -1,6 +1,6 @@
 from typing import Optional
 
-from maxo.types import Callback, InlineKeyboardButton
+from maxo.types import Callback, CallbackKeyboardButton
 from maxo_dialog.api.internal import RawKeyboard
 from maxo_dialog.api.protocols import DialogManager, DialogProtocol
 from maxo_dialog.widgets.common import (
@@ -61,25 +61,25 @@ class ScrollingGroup(Group, BaseScroll):
 
         return [
             [
-                InlineKeyboardButton(
+                CallbackKeyboardButton(
                     text="1",
-                    callback_data=self._item_callback_data("0"),
+                    payload=self._item_callback_data("0"),
                 ),
-                InlineKeyboardButton(
+                CallbackKeyboardButton(
                     text="<",
-                    callback_data=self._item_callback_data(prev_page),
+                    payload=self._item_callback_data(prev_page),
                 ),
-                InlineKeyboardButton(
+                CallbackKeyboardButton(
                     text=str(current_page + 1),
-                    callback_data=self._item_callback_data(current_page),
+                    payload=self._item_callback_data(current_page),
                 ),
-                InlineKeyboardButton(
+                CallbackKeyboardButton(
                     text=">",
-                    callback_data=self._item_callback_data(next_page),
+                    payload=self._item_callback_data(next_page),
                 ),
-                InlineKeyboardButton(
+                CallbackKeyboardButton(
                     text=str(last_page + 1),
-                    callback_data=self._item_callback_data(last_page),
+                    payload=self._item_callback_data(last_page),
                 ),
             ],
         ]
@@ -87,8 +87,8 @@ class ScrollingGroup(Group, BaseScroll):
     async def _render_page(
         self,
         page: int,
-        keyboard: list[list[InlineKeyboardButton]],
-    ) -> list[list[InlineKeyboardButton]]:
+        keyboard: list[list[CallbackKeyboardButton]],
+    ) -> list[list[CallbackKeyboardButton]]:
         pages = self._get_page_count(keyboard)
         last_page = pages - 1
         current_page = min(last_page, page)

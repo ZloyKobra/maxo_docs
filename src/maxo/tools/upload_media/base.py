@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from maxo.enums import UploadType
 
 
-class UploadMedia(ABC):
+class InputFile(ABC):
     __slots__ = ()
 
     @property

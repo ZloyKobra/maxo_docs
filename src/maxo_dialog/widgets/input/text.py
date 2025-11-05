@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from abc import abstractmethod
 from collections.abc import Callable
 from typing import (
@@ -11,9 +9,10 @@ from typing import (
     Union,
 )
 
-from maxo.dispatcher.event.handler import FilterObject
-from maxo.types import AttachmentType, Message
+from maxo.enums import AttachmentType
+from maxo.types import Message
 from maxo_dialog.api.protocols import DialogManager, DialogProtocol
+from maxo_dialog.tools.filter_object import FilterObject
 from maxo_dialog.widgets.common import ManagedWidget
 from maxo_dialog.widgets.widget_event import (
     WidgetEventProcessor,
@@ -31,7 +30,7 @@ class OnSuccess(Protocol[T]):
     async def __call__(
         self,
         message: Message,
-        widget: ManagedTextInput[T],
+        widget: "ManagedTextInput[T]",
         dialog_manager: DialogManager,
         data: T,
         /,
@@ -44,7 +43,7 @@ class OnError(Protocol[T]):
     async def __call__(
         self,
         message: Message,
-        widget: ManagedTextInput[T],
+        widget: "ManagedTextInput[T]",
         dialog_manager: DialogManager,
         error: ValueError,
         /,

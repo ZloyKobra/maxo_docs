@@ -53,6 +53,9 @@ class State:
 
         return raw_state == self.state
 
+    def __hash__(self) -> int:
+        return hash(self.state)
+
 
 class StatesGroupMetaClass(type):
     __states__: Sequence[State]

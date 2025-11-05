@@ -9,7 +9,7 @@ from typing import (
     Union,
 )
 
-from maxo.types import Callback, InlineKeyboardButton
+from maxo.types import Callback, CallbackKeyboardButton
 from maxo_dialog.api.entities import ChatEvent
 from maxo_dialog.api.internal import RawKeyboard
 from maxo_dialog.api.protocols import DialogManager, DialogProtocol
@@ -99,7 +99,7 @@ class Select(Keyboard, Generic[T]):
         target_item: Any,
         data: dict,
         manager: DialogManager,
-    ) -> InlineKeyboardButton:
+    ) -> CallbackKeyboardButton:
         """
         Render one of the buttons in keyboard.
 
@@ -115,9 +115,9 @@ class Select(Keyboard, Generic[T]):
             "pos0": pos,
         }
         item_id = self.item_id_getter(target_item)
-        return InlineKeyboardButton(
+        return CallbackKeyboardButton(
             text=await self.text.render_text(data, manager),
-            callback_data=self._item_callback_data(item_id),
+            payload=self._item_callback_data(item_id),
         )
 
     async def _process_item_callback(

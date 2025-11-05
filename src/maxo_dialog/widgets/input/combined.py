@@ -1,12 +1,12 @@
 from collections.abc import Callable
 from typing import Any, Optional
 
-from maxo.dispatcher.event.handler import FilterObject
 from maxo.types import Message
 from maxo_dialog.api.protocols import (
     DialogManager,
     DialogProtocol,
 )
+from maxo_dialog.tools.filter_object import FilterObject
 
 from .base import BaseInput
 

@@ -26,8 +26,6 @@ class DialogUpdateEvent(MaxoType):
     data: Any
     intent_id: Optional[str]
     stack_id: Optional[str]
-    thread_id: Optional[int]
-    business_connection_id: Optional[str]
     show_mode: Optional[ShowMode] = None
     bot: Bot
 

@@ -1,9 +1,9 @@
-from .base import UploadMedia
-from .buffered import BufferedUploadMedia
-from .file_system import FSUploadMedia
+from .base import InputFile
+from .buffered import BufferedInputFile
+from .file_system import FSInputFile
 
 __all__ = (
-    "BufferedUploadMedia",
-    "FSUploadMedia",
-    "UploadMedia",
+    "BufferedInputFile",
+    "FSInputFile",
+    "InputFile",
 )

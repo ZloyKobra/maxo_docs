@@ -4,14 +4,14 @@ from maxo.bot.bot import Bot
 from maxo.bot.method_results.upload.upload_media import UploadMediaResult
 from maxo.errors.api import RetvalReturnedServerException
 from maxo.omit import is_defined
-from maxo.tools.upload_media import UploadMedia
+from maxo.tools.upload_media import InputFile
 
 
 class UploadMediaFacade:
     def __init__(
         self,
         bot: Bot,
-        upload_media: UploadMedia,
+        upload_media: InputFile,
     ) -> None:
         self._bot = bot
         self._upload_media = upload_media

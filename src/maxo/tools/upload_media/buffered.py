@@ -1,8 +1,8 @@
 from maxo.enums import UploadType
-from maxo.tools.upload_media.base import UploadMedia
+from maxo.tools.upload_media.base import InputFile
 
 
-class BufferedUploadMedia(UploadMedia):
+class BufferedInputFile(InputFile):
     __slots__ = (
         "_data",
         "_file_name",
@@ -28,19 +28,19 @@ class BufferedUploadMedia(UploadMedia):
         return self._file_name
 
     @classmethod
-    def image(cls, data: bytes, file_name: str) -> "BufferedUploadMedia":
+    def image(cls, data: bytes, file_name: str) -> "BufferedInputFile":
         return cls(data=data, file_name=file_name, type=UploadType.IMAGE)
 
     @classmethod
-    def video(cls, data: bytes, file_name: str) -> "BufferedUploadMedia":
+    def video(cls, data: bytes, file_name: str) -> "BufferedInputFile":
         return cls(data=data, file_name=file_name, type=UploadType.VIDEO)
 
     @classmethod
-    def audio(cls, data: bytes, file_name: str) -> "BufferedUploadMedia":
+    def audio(cls, data: bytes, file_name: str) -> "BufferedInputFile":
         return cls(data=data, file_name=file_name, type=UploadType.AUDIO)
 
     @classmethod
-    def file(cls, data: bytes, file_name: str) -> "BufferedUploadMedia":
+    def file(cls, data: bytes, file_name: str) -> "BufferedInputFile":
         return cls(data=data, file_name=file_name, type=UploadType.FILE)
 
     async def read(self) -> bytes:

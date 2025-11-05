@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from typing import Optional, Union
 
-from maxo.types.api import Callback
+from maxo.types import Callback
 from maxo_dialog.api.internal import KeyboardWidget, RawKeyboard
 from maxo_dialog.api.protocols import DialogManager, DialogProtocol
 from maxo_dialog.widgets.common import (
