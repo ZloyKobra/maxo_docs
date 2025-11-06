@@ -11,10 +11,13 @@ from typing import (
 from maxo import SimpleRouter
 from maxo.enums import ChatType
 from maxo.fsm import State, StatesGroup
+from maxo.routing.ctx import Ctx
 from maxo.routing.interfaces import Router
-from maxo.tools.facades import MessageCallbackFacade
-from maxo.types import Callback, Chat
+from maxo.routing.middlewares.event_context import UPDATE_CONTEXT_KEY
+from maxo.routing.updates import MessageCallback
+from maxo.types import Callback
 from maxo.types.message import Message
+from maxo.types.update_context import UpdateContext
 from maxo_dialog.api.entities import Context, Data, LaunchMode, NewMessage
 from maxo_dialog.api.exceptions import UnregisteredWindowError
 from maxo_dialog.api.internal import Widget, WindowProtocol
@@ -136,6 +139,7 @@ class Dialog(SimpleRouter, DialogProtocol):
     async def _message_handler(
         self,
         message: Message,
+        ctx: Ctx,
         dialog_manager: DialogManager,
     ):
         old_context = dialog_manager.current_context()
@@ -153,22 +157,20 @@ class Dialog(SimpleRouter, DialogProtocol):
 
     async def _callback_handler(
         self,
-        callback: Callback,
+        callback: MessageCallback,
+        ctx: Ctx,
         dialog_manager: DialogManager,
     ):
         old_context = dialog_manager.current_context()
-        intent_id, callback_data = remove_intent_id(callback.callback.payload)
+        intent_id, payload = remove_intent_id(callback.callback.payload)
 
-        cleaned_callback = dataclasses.replace(callback.callback, payload=callback_data)
-        cleaned_facade = MessageCallbackFacade(
-            bot=callback.bot,
-            update=dataclasses.replace(callback.update, callback=cleaned_callback),
-        )
+        cleaned_callback = dataclasses.replace(callback.callback, payload=payload)
+        cleaned_event = dataclasses.replace(callback, callback=cleaned_callback)
 
         window = await self._current_window(dialog_manager)
         try:
             processed = await window.process_callback(
-                cleaned_facade,
+                cleaned_event,
                 self,
                 dialog_manager,
             )
@@ -193,8 +195,10 @@ class Dialog(SimpleRouter, DialogProtocol):
         if processed:
             # something happened
             return True
-        event_chat: Chat = dialog_manager.middleware_data["event_chat"]
-        if event_chat.type == ChatType.DIALOG:
+        update_context: UpdateContext = dialog_manager.middleware_data[
+            UPDATE_CONTEXT_KEY
+        ]
+        if update_context.chat_type == ChatType.DIALOG:
             # for private chats we can ensure dialog is visible
             return True
         return False
@@ -214,7 +218,7 @@ class Dialog(SimpleRouter, DialogProtocol):
         return self._states_group
 
     def states_group_name(self) -> str:
-        return repr(self._states_group)
+        return self._states_group.__full_group_name__
 
     async def process_result(
         self,

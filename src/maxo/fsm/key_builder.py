@@ -20,7 +20,7 @@ class StorageKeyType(str, Enum):
     LOCK = "lock"
 
 
-class KeyBuilder(Protocol):
+class BaseKeyBuilder(Protocol):
     __slots__ = ()
 
     @abstractmethod
@@ -32,7 +32,7 @@ class KeyBuilder(Protocol):
         raise NotImplementedError
 
 
-class DefaultKeyBuilder(KeyBuilder):
+class DefaultKeyBuilder(BaseKeyBuilder):
     __slots__ = (
         "prefix",
         "separator",

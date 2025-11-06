@@ -37,13 +37,14 @@ class FSMContextMiddleware(BaseMiddleware[Update[Any]]):
             return await next(ctx)
 
         async with self._event_isolation.lock(key=storage_key):
-            state = FSMContext(
+            fsm_context = FSMContext(
                 key=storage_key,
                 storage=self._storage,
             )
             ctx.storage = self._storage
-            ctx.state = state  # TODO ???
-            ctx.raw_state = await state.get_state()
+            ctx.fsm_context = fsm_context
+            ctx.fsm_storage = self._storage
+            ctx.raw_state = await fsm_context.get_state()
 
             return await next(ctx)
 

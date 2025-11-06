@@ -111,7 +111,7 @@ class Counter(Keyboard):
             row.append(
                 CallbackKeyboardButton(
                     text=minus,
-                    payload=self._item_callback_data("-"),
+                    payload=self._item_payload("-"),
                 ),
             )
         if self.text:
@@ -122,7 +122,7 @@ class Counter(Keyboard):
             row.append(
                 CallbackKeyboardButton(
                     text=text,
-                    payload=self._item_callback_data(""),
+                    payload=self._item_payload(""),
                 ),
             )
         if self.plus:
@@ -130,7 +130,7 @@ class Counter(Keyboard):
             row.append(
                 CallbackKeyboardButton(
                     text=plus,
-                    payload=self._item_callback_data("+"),
+                    payload=self._item_payload("+"),
                 ),
             )
         return [row]

@@ -1,6 +1,6 @@
 from abc import abstractmethod
 from enum import Enum
-from typing import Any, Optional, Protocol, Union
+from typing import Any, Optional, Protocol
 
 from maxo import Bot
 from maxo.fsm import State
@@ -61,8 +61,6 @@ class BaseDialogManager(Protocol):
         user_id: Optional[int] = None,
         chat_id: Optional[int] = None,
         stack_id: Optional[str] = None,
-        thread_id: Union[int, None, UnsetId] = UnsetId.UNSET,
-        business_connection_id: Union[str, None, UnsetId] = UnsetId.UNSET,
         load: bool = False,  # load chat and user
     ) -> "BaseDialogManager":
         raise NotImplementedError
@@ -76,8 +74,6 @@ class BgManagerFactory(Protocol):
         user_id: int,
         chat_id: int,
         stack_id: Optional[str] = None,
-        thread_id: Optional[int] = None,
-        business_connection_id: Optional[str] = None,
         load: bool = False,  # load chat and user
     ) -> "BaseDialogManager":
         raise NotImplementedError

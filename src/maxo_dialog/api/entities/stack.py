@@ -4,8 +4,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Optional
 
-from maxo.enums import AttachmentType
 from maxo.fsm import State
+from maxo.types.attachments import Attachments
 from maxo_dialog.api.exceptions import DialogStackOverflow
 
 from .access import AccessSettings
@@ -36,24 +36,17 @@ def new_id():
     return id_to_str(new_int_id())
 
 
-@dataclass(unsafe_hash=True)
+@dataclass(slots=True, unsafe_hash=True)
 class Stack:
     _id: str = field(compare=True, default_factory=new_id)
     intents: list[str] = field(compare=False, default_factory=list)
     last_message_id: Optional[str] = field(compare=False, default=None)
-    last_reply_keyboard: bool = field(compare=False, default=False)
-    last_media_id: Optional[str] = field(compare=False, default=None)
-    last_media_unique_id: Optional[str] = field(compare=False, default=None)
-    last_income_media_group_id: Optional[str] = field(
-        compare=False,
-        default=None,
-    )
-    content_type: Optional[AttachmentType] = field(compare=False, default=None)
-    access_settings: Optional[AccessSettings] = None
-    has_protected_content: Optional[bool] = field(compare=False, default=None)
+    last_sequence_id: Optional[int] = field(compare=False, default=None)
+    last_attachments: list[Attachments] = field(compare=False, default_factory=list)
+    access_settings: Optional[AccessSettings] = field(compare=False, default=None)
 
     @property
-    def id(self):
+    def id(self) -> str:
         return self._id
 
     def push(self, state: State, data: Data) -> Context:
@@ -71,14 +64,14 @@ class Stack:
         self.intents.append(context.id)
         return context
 
-    def pop(self):
+    def pop(self) -> str:
         return self.intents.pop()
 
-    def last_intent_id(self):
+    def last_intent_id(self) -> str:
         return self.intents[-1]
 
-    def empty(self):
+    def empty(self) -> bool:
         return not self.intents
 
-    def default(self):
+    def default(self) -> bool:
         return self.id == DEFAULT_STACK_ID

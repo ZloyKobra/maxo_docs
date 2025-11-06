@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from typing import Optional, Union
 
-from maxo.types import Callback
+from maxo.routing.updates import MessageCallback
 from maxo_dialog.api.internal import KeyboardWidget, RawKeyboard
 from maxo_dialog.api.protocols import DialogManager, DialogProtocol
 from maxo_dialog.widgets.common import (
@@ -49,17 +49,17 @@ class Keyboard(Actionable, Whenable, KeyboardWidget):
             return None
         return f"{self.widget_id}:"
 
-    def _own_callback_data(self) -> Union[str, None]:
+    def _own_payload(self) -> Union[str, None]:
         """Create callback data for only button in widget."""
         return self.widget_id
 
-    def _item_callback_data(self, data: Union[str, int]):
+    def _item_payload(self, data: Union[str, int]):
         """Create callback data for widgets button if multiple."""
         return f"{self.callback_prefix()}{data}"
 
     async def process_callback(
         self,
-        callback: Callback,
+        callback: MessageCallback,
         dialog: DialogProtocol,
         manager: DialogManager,
     ) -> bool:
@@ -81,26 +81,26 @@ class Keyboard(Actionable, Whenable, KeyboardWidget):
 
     async def _process_own_callback(
         self,
-        callback: Callback,
+        callback: MessageCallback,
         dialog: DialogProtocol,
         manager: DialogManager,
     ) -> bool:
-        """Process callback related to _own_callback_data."""
+        """Process callback related to _own_payload."""
         return False
 
     async def _process_item_callback(
         self,
-        callback: Callback,
+        callback: MessageCallback,
         data: str,
         dialog: DialogProtocol,
         manager: DialogManager,
     ) -> bool:
-        """Process callback related to _item_callback_data."""
+        """Process callback related to _item_payload."""
         return False
 
     async def _process_other_callback(
         self,
-        callback: Callback,
+        callback: MessageCallback,
         dialog: DialogProtocol,
         manager: DialogManager,
     ) -> bool:
@@ -140,7 +140,7 @@ class Or(Keyboard):
 
     async def _process_other_callback(
         self,
-        callback: Callback,
+        callback: MessageCallback,
         dialog: DialogProtocol,
         manager: DialogManager,
     ) -> bool:

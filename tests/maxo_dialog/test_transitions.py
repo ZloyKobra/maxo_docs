@@ -1,8 +1,10 @@
 import pytest
 
-from maxo import Dispatcher
+from maxo import Ctx, Dispatcher
 from maxo.bot.bot import Bot
+from maxo.fsm.key_builder import DefaultKeyBuilder
 from maxo.fsm.state import State, StatesGroup
+from maxo.fsm.storages.memory import SimpleEventIsolation
 from maxo.routing.filters.command import CommandStart
 from maxo.types.message import Message
 from maxo_dialog import (
@@ -13,6 +15,7 @@ from maxo_dialog import (
     setup_dialogs,
 )
 from maxo_dialog.test_tools import BotClient, MockMessageManager
+from maxo_dialog.test_tools.bot_client import FakeBot
 from maxo_dialog.test_tools.keyboard import InlineButtonTextLocator
 from maxo_dialog.test_tools.memory_storage import JsonMemoryStorage
 from maxo_dialog.widgets.kbd import Back, Cancel, Next, Start
@@ -28,7 +31,7 @@ class SecondarySG(StatesGroup):
     start = State()
 
 
-async def start(message: Message, dialog_manager: DialogManager):
+async def start(message: Message, ctx: Ctx, dialog_manager: DialogManager):
     await dialog_manager.start(MainSG.start, mode=StartMode.RESET_STACK)
 
 
@@ -39,7 +42,9 @@ def message_manager() -> MockMessageManager:
 
 @pytest.fixture
 def dp(message_manager: MockMessageManager):
-    dp = Dispatcher(storage=JsonMemoryStorage())
+    key_builder = DefaultKeyBuilder(with_destiny=True)
+    event_isolation = SimpleEventIsolation(key_builder=key_builder)
+    dp = Dispatcher(storage=JsonMemoryStorage(), event_isolation=event_isolation, key_builder=key_builder,)
     dp.message_created.handler(start, CommandStart())
     dp.include(
         Dialog(
@@ -66,7 +71,7 @@ def dp(message_manager: MockMessageManager):
             ),
         )
     )
-    setup_dialogs(dp, message_manager=message_manager)
+    setup_dialogs(dp, message_manager=message_manager, events_isolation=event_isolation)
     return dp
 
 
@@ -77,7 +82,7 @@ def client(dp) -> BotClient:
 
 @pytest.fixture
 def bot() -> Bot:
-    return Bot(token="1234567890:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmno")
+    return FakeBot()
 
 
 @pytest.mark.asyncio
@@ -102,7 +107,7 @@ async def test_next_back(bot, message_manager, client):
     )
     message_manager.assert_answered(callback_id)
     second_message = message_manager.one_message()
-    assert second_message.text == "Second"
+    assert second_message.unsafe_body.text == "Second"
 
     # click back
     message_manager.reset_history()
@@ -112,8 +117,8 @@ async def test_next_back(bot, message_manager, client):
     )
     message_manager.assert_answered(callback_id)
     last_message = message_manager.one_message()
-    assert last_message.text == "First"
-    assert last_message.reply_markup
+    assert last_message.unsafe_body.text == "First"
+    assert last_message.unsafe_body.keyboard
 
 
 @pytest.mark.asyncio
@@ -129,7 +134,7 @@ async def test_finish_last(bot, message_manager, client):
     )
     message_manager.assert_answered(callback_id)
     last_message = message_manager.one_message()
-    assert not last_message.reply_markup, "Keyboard closed"
+    assert not last_message.unsafe_body.keyboard, "Keyboard closed"
 
 
 @pytest.mark.asyncio
@@ -147,7 +152,7 @@ async def test_reset_stack(bot, message_manager, client):
     )
     message_manager.assert_answered(callback_id)
     last_message = message_manager.one_message()
-    assert not last_message.reply_markup, "Keyboard closed"
+    assert not last_message.unsafe_body.keyboard, "Keyboard closed"
 
 
 @pytest.mark.asyncio
@@ -163,7 +168,7 @@ async def test_subdialog(bot, message_manager, client):
     )
     message_manager.assert_answered(callback_id)
     second_message = message_manager.one_message()
-    assert second_message.text == "Subdialog"
+    assert second_message.unsafe_body.text == "Subdialog"
 
     # close subdialog
     message_manager.reset_history()
@@ -173,5 +178,5 @@ async def test_subdialog(bot, message_manager, client):
     )
     message_manager.assert_answered(callback_id)
     last_message = message_manager.one_message()
-    assert last_message.text == "First"
-    assert last_message.reply_markup
+    assert last_message.unsafe_body.text == "First"
+    assert last_message.unsafe_body.keyboard

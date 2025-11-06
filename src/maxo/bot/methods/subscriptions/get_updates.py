@@ -1,5 +1,3 @@
-from collections.abc import Sequence
-
 from retejo.core.markers import Omittable, Omitted
 from retejo.http.markers import QueryParam
 
@@ -41,4 +39,4 @@ class GetUpdates(MaxoMethod[GetUpdatesResult]):
     limit: QueryParam[Omittable[int]] = 100
     timeout: QueryParam[Omittable[int]] = 30
     marker: QueryParam[Omittable[int | None]] = Omitted()
-    types: QueryParam[Omittable[Sequence[str]]] = Omitted()
+    types: QueryParam[Omittable[str]] = Omitted()

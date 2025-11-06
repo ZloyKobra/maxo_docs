@@ -136,7 +136,9 @@ class SimpleRouter(Router):
 
     async def trigger_child(self, ctx: Ctx[_UpdateT]) -> Any:
         for child_router in self.children_routers:
-            return await child_router.trigger(ctx)
+            result = await child_router.trigger(ctx)
+            if result is UNHANDLED:
+                continue
         return UNHANDLED
 
     async def trigger(self, ctx: Ctx[_UpdateT]) -> Any:

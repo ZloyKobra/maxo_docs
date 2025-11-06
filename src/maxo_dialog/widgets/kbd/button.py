@@ -50,7 +50,7 @@ class Button(Keyboard):
             [
                 CallbackKeyboardButton(
                     text=await self.text.render_text(data, manager),
-                    payload=self._own_callback_data(),
+                    payload=self._own_payload(),
                 ),
             ],
         ]

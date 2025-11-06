@@ -3,12 +3,12 @@ from typing import Optional, Union
 
 from maxo import SimpleRouter
 from maxo.fsm import State, StatesGroup
-from maxo.fsm.event_isolations import BaseEventIsolation
 from maxo.fsm.state import any_state
+from maxo.fsm.storages.base import BaseEventIsolation
 from maxo.fsm.storages.memory import SimpleEventIsolation
 from maxo.routing.interfaces import Router
 from maxo.routing.observers import UpdateObserver
-from maxo_dialog.api.entities import DIALOG_EVENT_NAME
+from maxo_dialog.api.entities import DialogUpdateEvent
 from maxo_dialog.api.exceptions import UnregisteredDialogError
 from maxo_dialog.api.internal import DialogManagerFactory
 from maxo_dialog.api.protocols import (
@@ -39,11 +39,11 @@ from .context.access_validator import DefaultAccessValidator
 
 
 def _setup_event_observer(router: SimpleRouter) -> None:
-    router.observers[DIALOG_EVENT_NAME] = UpdateObserver()
+    router.observers[DialogUpdateEvent] = UpdateObserver()
 
 
 def _register_event_handler(router: SimpleRouter, callback: Callable) -> None:
-    handler = router.observers[DIALOG_EVENT_NAME]
+    handler = router.observers[DialogUpdateEvent]
     handler.handler(callback, any_state)
 
 
@@ -92,7 +92,7 @@ class DialogRegistry(DialogRegistryProtocol):
 def _startup_callback(
     registry: DialogRegistry,
 ) -> Callable:
-    async def _setup_dialogs(router):
+    async def _setup_dialogs(ctx):
         registry.refresh()
 
     return _setup_dialogs
@@ -118,7 +118,7 @@ def _register_middleware(
     )
     # delayed configuration of middlewares
     router.after_startup.handler(_startup_callback(registry))
-    update_handler = router.observers[DIALOG_EVENT_NAME]
+    update_handler = router.observers[DialogUpdateEvent]
 
     router.exception.middleware.inner(
         IntentErrorMiddleware(
@@ -136,7 +136,7 @@ def _register_middleware(
     router.exception.middleware.inner(manager_middleware)
 
     router.message_created.middleware.outer(intent_middleware.process_message)
-    router.message_callback.middleware.outer(intent_middleware.process_callback_query)
+    router.message_callback.middleware.outer(intent_middleware.process_callback)
     update_handler.middleware.outer(intent_middleware.process_aiogd_update)
 
     router.message_created.middleware.outer(context_unlocker_middleware)

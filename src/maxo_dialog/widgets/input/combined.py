@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from typing import Any, Optional
 
-from maxo.types import Message
+from maxo.routing.updates import MessageCreated
 from maxo_dialog.api.protocols import (
     DialogManager,
     DialogProtocol,
@@ -25,7 +25,7 @@ class CombinedInput(BaseInput):
 
     async def process_message(
         self,
-        message: Message,
+        message: MessageCreated,
         dialog: DialogProtocol,
         manager: DialogManager,
     ) -> bool:

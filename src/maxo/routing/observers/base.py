@@ -65,9 +65,7 @@ class BaseObserver(Observer[_UpdateT, _HandlerT, _HandlerFnT], ABC):
         inline_ctx: Callable[[_HandlerFunc], _HandlerFunc] | None = _inline_ctx,
     ) -> Callable[[_HandlerFnT], _HandlerFnT]:
         def wrapper(handler_fn: _HandlerFnT) -> _HandlerFnT:
-            if inline_ctx:
-                return self.handler(inline_ctx(handler_fn), filter)
-            return self.handler(handler_fn, filter)
+            return self.handler(handler_fn, filter, inline_ctx)
 
         return wrapper
 

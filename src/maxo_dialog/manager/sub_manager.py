@@ -1,5 +1,5 @@
 import dataclasses
-from typing import Any, Optional, Union
+from typing import Any, Optional
 
 from maxo.fsm import State
 from maxo.types import Message
@@ -16,7 +16,6 @@ from maxo_dialog.api.internal import Widget
 from maxo_dialog.api.protocols import (
     BaseDialogManager,
     DialogManager,
-    UnsetId,
 )
 
 
@@ -151,15 +150,11 @@ class SubManager(DialogManager):
         user_id: Optional[int] = None,
         chat_id: Optional[int] = None,
         stack_id: Optional[str] = None,
-        thread_id: Union[int, None, UnsetId] = UnsetId.UNSET,
-        business_connection_id: Union[str, None, UnsetId] = UnsetId.UNSET,
         load: bool = False,
     ) -> BaseDialogManager:
         return self.manager.bg(
             user_id=user_id,
             chat_id=chat_id,
             stack_id=stack_id,
-            thread_id=thread_id,
-            business_connection_id=business_connection_id,
             load=load,
         )

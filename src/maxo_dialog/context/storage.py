@@ -4,9 +4,8 @@ from typing import Optional
 
 from maxo import Bot
 from maxo.fsm import State, StatesGroup
-from maxo.fsm.event_isolations import BaseEventIsolation
 from maxo.fsm.key_builder import StorageKey
-from maxo.fsm.storages.base import BaseStorage
+from maxo.fsm.storages.base import BaseEventIsolation, BaseStorage
 from maxo_dialog.api.entities import (
     DEFAULT_STACK_ID,
     AccessSettings,
@@ -22,10 +21,10 @@ class StorageProxy:
         storage: BaseStorage,
         events_isolation: BaseEventIsolation,
         user_id: Optional[int],
-        chat_id: int,
+        chat_id: Optional[int],
         bot: Bot,
         state_groups: dict[str, type[StatesGroup]],
-    ):
+    ) -> None:
         self.storage = storage
         self.events_isolation = events_isolation
         self.state_groups = state_groups
@@ -39,7 +38,7 @@ class StorageProxy:
             self.events_isolation.lock(key),
         )
 
-    async def unlock(self):
+    async def unlock(self) -> None:
         await self.lock_stack.aclose()
 
     async def load_context(self, intent_id: str) -> Context:
@@ -67,7 +66,6 @@ class StorageProxy:
         key = self._stack_key(fixed_stack_id)
         await self.lock(key)
         data = await self.storage.get_data(key)
-        data.pop("access_settings", None)  # compat with 2.2a5
         access_settings = self._default_access_settings(stack_id)
         if not data:
             return Stack(_id=fixed_stack_id, access_settings=access_settings)
@@ -111,10 +109,7 @@ class StorageProxy:
                 "_id": stack.id,
                 "intents": stack.intents,
                 "last_message_id": stack.last_message_id,
-                "last_reply_keyboard": stack.last_reply_keyboard,
-                "last_media_id": stack.last_media_id,
-                "last_media_unique_id": stack.last_media_unique_id,
-                "last_income_media_group_id": stack.last_income_media_group_id,
+                "last_sequence_id": stack.last_sequence_id,
             }
             await self.storage.set_data(
                 key=self._stack_key(stack.id),
@@ -123,7 +118,7 @@ class StorageProxy:
 
     def _context_key(self, intent_id: str) -> StorageKey:
         return StorageKey(
-            bot_id=self.bot.id,
+            bot_id=self.bot.state.info.user_id,
             chat_id=self.chat_id,
             user_id=self.chat_id,
             destiny=f"aiogd:context:{intent_id}",
@@ -132,17 +127,14 @@ class StorageProxy:
     def _fixed_stack_id(self, stack_id: str) -> str:
         if stack_id != DEFAULT_STACK_ID:
             return stack_id
-        # private chat has chat_id=user_id and no business connection
-        if self.user_id in (None, self.chat_id) and self.business_connection_id is None:
-            return stack_id
         return f"<{self.user_id}>"
 
     def _stack_key(self, stack_id: str) -> StorageKey:
         stack_id = self._fixed_stack_id(stack_id)
         return StorageKey(
-            bot_id=self.bot.id,
+            bot_id=self.bot.state.info.user_id,
             chat_id=self.chat_id,
-            user_id=self.chat_id,
+            user_id=self.user_id,
             destiny=f"aiogd:stack:{stack_id}",
         )
 

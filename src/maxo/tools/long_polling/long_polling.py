@@ -1,16 +1,17 @@
 import asyncio
 import contextlib
+import logging
 from typing import Any, AsyncIterator, Sequence
 
 from maxo import loggers
 from maxo.backoff import Backoff, BackoffConfig
 from maxo.bot.bot import Bot
 from maxo.omit import Omittable, Omitted
+from maxo.routing.dispatcher import Dispatcher
 from maxo.routing.signals.shutdown import AfterShutdown, BeforeShutdown
 from maxo.routing.signals.startup import AfterStartup, BeforeStartup
 from maxo.routing.signals.update import Update
 from maxo.routing.utils import collect_used_updates
-from maxo.tools.dispatcher import Dispatcher
 
 _DEFAULT_BACKOFF_CONFIG = BackoffConfig(
     min_delay=1.0,
@@ -65,7 +66,7 @@ class LongPolling:
         dispatcher = self._dispatcher
         dispatcher.workflow_data.update(bot=bot, **workflow_data)
 
-        types = types or collect_used_updates(self._dispatcher)
+        types = ",".join(sorted(types or collect_used_updates(self._dispatcher)))
 
         async with self._lock:
             await dispatcher.feed_signal(BeforeStartup())
@@ -76,7 +77,7 @@ class LongPolling:
                     bot.state.info.user_id,
                 )
 
-                await dispatcher.feed_signal(AfterStartup())
+                await dispatcher.feed_signal(AfterStartup(), bot)
 
                 updates_poller = self._get_updates(
                     bot=bot,
@@ -89,9 +90,10 @@ class LongPolling:
                 with contextlib.suppress(KeyboardInterrupt):
                     async with asyncio.TaskGroup() as tg:
                         async for update in updates_poller:
-                            tg.create_task(dispatcher.feed_max_update(update))
+                            logging.debug("New update: %s", update)
+                            tg.create_task(dispatcher.feed_max_update(update, bot))
 
-                await dispatcher.feed_signal(BeforeShutdown())
+                await dispatcher.feed_signal(BeforeShutdown(), bot)
 
                 loggers.dispatcher.info(
                     "Polling stop for @%s bot id=%s",
@@ -107,7 +109,7 @@ class LongPolling:
         timeout: Omittable[int] = 30,
         limit: Omittable[int] = 100,
         marker: Omittable[int | None] = Omitted(),
-        types: Omittable[Sequence[str]] = Omitted(),
+        types: Omittable[str] = Omitted(),
     ) -> AsyncIterator[Update[Any]]:
         backoff = Backoff(self._backoff_config)
         bot_id = bot.state.info.user_id

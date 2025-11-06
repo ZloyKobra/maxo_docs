@@ -63,23 +63,23 @@ class ScrollingGroup(Group, BaseScroll):
             [
                 CallbackKeyboardButton(
                     text="1",
-                    payload=self._item_callback_data("0"),
+                    payload=self._item_payload("0"),
                 ),
                 CallbackKeyboardButton(
                     text="<",
-                    payload=self._item_callback_data(prev_page),
+                    payload=self._item_payload(prev_page),
                 ),
                 CallbackKeyboardButton(
                     text=str(current_page + 1),
-                    payload=self._item_callback_data(current_page),
+                    payload=self._item_payload(current_page),
                 ),
                 CallbackKeyboardButton(
                     text=">",
-                    payload=self._item_callback_data(next_page),
+                    payload=self._item_payload(next_page),
                 ),
                 CallbackKeyboardButton(
                     text=str(last_page + 1),
-                    payload=self._item_callback_data(last_page),
+                    payload=self._item_payload(last_page),
                 ),
             ],
         ]

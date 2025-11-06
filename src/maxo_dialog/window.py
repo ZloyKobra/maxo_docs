@@ -3,7 +3,13 @@ from logging import getLogger
 from typing import Any, Optional
 
 from maxo.fsm import State
-from maxo.types import Callback, Message
+from maxo.routing.middlewares.event_context import UPDATE_CONTEXT_KEY
+from maxo.routing.updates import MessageCallback, MessageCreated
+from maxo.types import (
+    InlineKeyboardAttachmentRequest,
+    Recipient,
+)
+from maxo.types.update_context import UpdateContext
 from maxo_dialog.api.entities import (
     MarkupVariant,
     MediaAttachment,
@@ -122,7 +128,7 @@ class Window(WindowProtocol):
 
     async def process_message(
         self,
-        message: Message,
+        message: MessageCreated,
         dialog: DialogProtocol,
         manager: DialogManager,
     ) -> bool:
@@ -136,7 +142,7 @@ class Window(WindowProtocol):
 
     async def process_callback(
         self,
-        callback: Callback,
+        callback: MessageCallback,
         dialog: DialogProtocol,
         manager: DialogManager,
     ) -> bool:
@@ -163,7 +169,7 @@ class Window(WindowProtocol):
         manager: DialogManager,
     ) -> NewMessage:
         logger.debug("Show window: %s", self)
-        chat = manager.middleware_data["event_chat"]
+        update_context: UpdateContext = manager.middleware_data[UPDATE_CONTEXT_KEY]
         try:
             current_data = await self.load_data(dialog, manager)
         except Exception:
@@ -171,16 +177,22 @@ class Window(WindowProtocol):
             raise
         try:
             return NewMessage(
-                chat=chat,
+                recipient=Recipient(
+                    chat_type=update_context.chat_type,
+                    chat_id=update_context.chat_id,
+                    user_id=update_context.user_id,
+                ),
                 text=await self.render_text(current_data, manager),
-                reply_markup=await self.render_kbd(current_data, manager),
                 parse_mode=self.parse_mode,
-                protect_content=self.protect_content,
-                media=await self.render_media(current_data, manager),
                 link_preview_options=await self.render_link_preview(
                     current_data,
                     manager,
                 ),
+                attachments=[
+                    InlineKeyboardAttachmentRequest.factory(
+                        await self.render_kbd(current_data, manager)
+                    )
+                ],
             )
         except Exception:
             logger.error("Cannot render window for state %s", self.state)

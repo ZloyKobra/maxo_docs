@@ -152,7 +152,7 @@ class SwitchPage(BasePager):
             [
                 CallbackKeyboardButton(
                     text=await self.text.render_text(data, manager),
-                    payload=self._item_callback_data(data["target_page"]),
+                    payload=self._item_payload(data["target_page"]),
                 ),
             ]
         ]
@@ -321,7 +321,7 @@ class NumberedPager(BasePager):
             buttons.append(
                 CallbackKeyboardButton(
                     text=text,
-                    payload=self._item_callback_data(target_page),
+                    payload=self._item_payload(target_page),
                 )
             )
         if buttons:

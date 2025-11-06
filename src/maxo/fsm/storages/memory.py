@@ -5,10 +5,9 @@ from contextlib import asynccontextmanager
 from copy import copy
 from typing import Any, AsyncIterator, Hashable
 
-from maxo.fsm.event_isolations import BaseEventIsolation
 from maxo.fsm.key_builder import (
+    BaseKeyBuilder,
     DefaultKeyBuilder,
-    KeyBuilder,
     StorageKey,
     StorageKeyType,
 )
@@ -24,7 +23,7 @@ class MemoryStorage(BaseStorage):
 
     def __init__(
         self,
-        key_builder: KeyBuilder | None = None,
+        key_builder: BaseKeyBuilder | None = None,
     ) -> None:
         self._data = {}
         self._state = {}
@@ -63,7 +62,7 @@ class SimpleEventIsolation(BaseEventIsolation):
 
     def __init__(
         self,
-        key_builder: KeyBuilder | None = None,
+        key_builder: BaseKeyBuilder | None = None,
     ) -> None:
         if key_builder is None:
             key_builder = DefaultKeyBuilder()

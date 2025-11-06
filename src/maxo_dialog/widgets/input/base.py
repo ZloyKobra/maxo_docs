@@ -6,6 +6,7 @@ from magic_filter import F
 
 from maxo.enums import AttachmentType
 from maxo.integrations.magic_filter import MagicFilter
+from maxo.routing.updates import MessageCreated
 from maxo.types import Message
 from maxo_dialog.api.internal import InputWidget
 from maxo_dialog.api.protocols import (
@@ -29,7 +30,7 @@ class BaseInput(Actionable, InputWidget):
     @abstractmethod
     async def process_message(
         self,
-        message: Message,
+        message: MessageCreated,
         dialog: DialogProtocol,
         manager: DialogManager,
     ) -> bool:
@@ -61,7 +62,7 @@ class MessageInput(BaseInput):
 
     async def process_message(
         self,
-        message: Message,
+        message: MessageCreated,
         dialog: DialogProtocol,
         manager: DialogManager,
     ) -> bool:

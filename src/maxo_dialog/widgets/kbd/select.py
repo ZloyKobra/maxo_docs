@@ -117,7 +117,7 @@ class Select(Keyboard, Generic[T]):
         item_id = self.item_id_getter(target_item)
         return CallbackKeyboardButton(
             text=await self.text.render_text(data, manager),
-            payload=self._item_callback_data(item_id),
+            payload=self._item_payload(item_id),
         )
 
     async def _process_item_callback(

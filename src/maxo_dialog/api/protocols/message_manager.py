@@ -36,6 +36,6 @@ class MessageManagerProtocol(Protocol):
     async def answer_callback(
         self,
         bot: Bot,
-        callback_query: Callback,
+        callback: Callback,
     ) -> None:
         raise NotImplementedError

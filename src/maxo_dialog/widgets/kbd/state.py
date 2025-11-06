@@ -112,7 +112,7 @@ class Back(EventProcessorButton):
             when=when,
         )
         self.text = text
-        self.callback_data = id
+        self.payload = id
         self.show_mode = show_mode
         self.user_on_click = on_click
 

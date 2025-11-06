@@ -2,13 +2,17 @@ import html
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional
 
 from jinja2 import Environment, PackageLoader, select_autoescape
 
 from maxo.enums import AttachmentType
 from maxo.fsm import State, StatesGroup
 from maxo.routing.interfaces import Router
+from maxo.routing.middlewares.event_context import (
+    EVENT_FROM_USER_KEY,
+    UPDATE_CONTEXT_KEY,
+)
 from maxo.types import Callback, CallbackKeyboardButton, Chat, User
 from maxo.types.message import Message
 from maxo_dialog.api.entities import (
@@ -27,9 +31,9 @@ from maxo_dialog.api.entities import (
     StartMode,
 )
 from maxo_dialog.api.exceptions import NoContextError
-from maxo_dialog.api.protocols import UnsetId
 from maxo_dialog.api.protocols.dialog import DialogProtocol
 from maxo_dialog.api.protocols.manager import BaseDialogManager, DialogManager
+from maxo_dialog.manager.manager_middleware import MANAGER_KEY
 from maxo_dialog.setup import collect_dialogs
 from maxo_dialog.utils import split_reply_callback
 
@@ -64,7 +68,7 @@ class RenderDialog:
 class FakeManager(DialogManager):
     def __init__(self):
         self._event = DialogUpdateEvent(
-            from_user=User(
+            sender=User(
                 id=1,
                 is_bot=False,
                 first_name="Fake",
@@ -79,13 +83,16 @@ class FakeManager(DialogManager):
         self._context: Optional[Context] = None
         self._dialog: Optional[DialogProtocol] = None
         self._data = {
-            "dialog_manager": self,
-            "event_chat": self._event.chat,
-            "event_from_user": self._event.from_user,
+            MANAGER_KEY: self,
+            UPDATE_CONTEXT_KEY: self._event.chat,
+            EVENT_FROM_USER_KEY: self._event.sender,
             EVENT_CONTEXT_KEY: EventContext(
                 bot=None,
                 chat=self._event.chat,
-                user=self._event.from_user,
+                chat_id=self._event.chat.chat_id,
+                chat_type=self._event.chat.type,
+                user=self._event.sender,
+                user_id=self._event.sender.user_id,
             ),
         }
 
@@ -230,8 +237,6 @@ class FakeManager(DialogManager):
         user_id: Optional[int] = None,
         chat_id: Optional[int] = None,
         stack_id: Optional[str] = None,
-        thread_id: Union[int, None, UnsetId] = UnsetId.UNSET,
-        business_connection_id: Union[str, None, UnsetId] = UnsetId.UNSET,
         load: bool = False,
     ) -> BaseDialogManager:
         return self
@@ -264,7 +269,7 @@ async def create_button(
 ) -> RenderButton:
     if not simulate_events:
         return RenderButton(title=title, state=state.state)
-    callback_query = Callback(
+    callback = Callback(
         id="1",
         from_user=User(id=1, is_bot=False, first_name=""),
         chat_instance="",
@@ -272,7 +277,7 @@ async def create_button(
     )
     manager.set_state(state)
     try:
-        await dialog._callback_handler(callback_query, dialog_manager=manager)
+        await dialog._callback_handler(callback, dialog_manager=manager)
     except Exception:
         logging.debug("Click %s", callback)
     state = manager.current_context().state
@@ -329,7 +334,7 @@ async def render_inline_keyboard(
         [
             await create_button(
                 title=button.text,
-                callback=button.callback_data,
+                callback=button.payload,
                 manager=manager,
                 dialog=dialog,
                 state=state,

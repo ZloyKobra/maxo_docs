@@ -1,19 +1,21 @@
-import sys
+import itertools
 from copy import deepcopy
 from datetime import datetime
 from logging import getLogger
-from typing import Any, Optional, Union, cast
+from typing import Any, Optional, cast
 
+from maxo import Ctx
 from maxo.enums import ChatStatusType, ChatType
 from maxo.fsm import State
 from maxo.routing.interfaces import Router
+from maxo.routing.middlewares.event_context import UPDATE_CONTEXT_KEY
 from maxo.routing.signals.exception import ExceptionEvent
-from maxo.tools.facades import MessageCallbackFacade
+from maxo.routing.updates import MessageCallback
 from maxo.types import (
-    Callback,
     Chat,
     Message,
     MessageKeyboardButton,
+    Recipient,
     User,
 )
 from maxo_dialog.api.entities import (
@@ -25,7 +27,6 @@ from maxo_dialog.api.entities import (
     Data,
     EventContext,
     LaunchMode,
-    MediaId,
     NewMessage,
     OldMessage,
     ShowMode,
@@ -43,7 +44,7 @@ from maxo_dialog.api.internal import (
     EVENT_SIMULATED,
     STACK_KEY,
     STORAGE_KEY,
-    FakeChat,
+    FakeRecipient,
     FakeUser,
 )
 from maxo_dialog.api.protocols import (
@@ -54,10 +55,8 @@ from maxo_dialog.api.protocols import (
     MediaIdStorageProtocol,
     MessageManagerProtocol,
     MessageNotModified,
-    UnsetId,
 )
 from maxo_dialog.context.storage import StorageProxy
-from maxo_dialog.utils import get_media_id
 
 from .bg_manager import BgManager
 
@@ -65,7 +64,6 @@ logger = getLogger(__name__)
 
 
 class ManagerImpl(DialogManager):
-
     def __init__(
         self,
         event: ChatEvent,
@@ -73,13 +71,13 @@ class ManagerImpl(DialogManager):
         media_id_storage: MediaIdStorageProtocol,
         registry: DialogRegistryProtocol,
         router: Router,
-        data: dict,
+        ctx: Ctx,
     ):
         self.disabled = False
         self.message_manager = message_manager
         self.media_id_storage = media_id_storage
         self._event = event
-        self._data = data
+        self._ctx = ctx
         self._show_mode: ShowMode = ShowMode.AUTO
         self._registry = registry
         self._router = router
@@ -101,7 +99,7 @@ class ManagerImpl(DialogManager):
     @property
     def middleware_data(self) -> dict:
         """Middleware data."""
-        return self._data
+        return self._ctx.raw_data
 
     @property
     def dialog_data(self) -> dict:
@@ -126,7 +124,7 @@ class ManagerImpl(DialogManager):
         return {
             "dialog_data": context.dialog_data,
             "start_data": context.start_data,
-            "middleware_data": self._data,
+            "middleware_data": self.middleware_data,
             "event": self.event,
         }
 
@@ -151,7 +149,7 @@ class ManagerImpl(DialogManager):
         return context
 
     def _current_context_unsafe(self) -> Optional[Context]:
-        return self._data[CONTEXT_KEY]
+        return getattr(self._ctx, CONTEXT_KEY, None)
 
     def has_context(self) -> bool:
         self.check_disabled()
@@ -159,16 +157,16 @@ class ManagerImpl(DialogManager):
 
     def current_stack(self) -> Stack:
         self.check_disabled()
-        return self._data[STACK_KEY]
+        return getattr(self._ctx, STACK_KEY)
 
     def storage(self) -> StorageProxy:
-        return self._data[STORAGE_KEY]
+        return getattr(self._ctx, STORAGE_KEY)
 
     async def _remove_kbd(self) -> None:
         if self.current_stack().last_message_id is None:
             return
         await self.message_manager.remove_kbd(
-            bot=self._data["bot"],
+            bot=self._ctx.bot,
             old_message=self._get_last_message(),
             show_mode=self._calc_show_mode(),
         )
@@ -206,13 +204,13 @@ class ManagerImpl(DialogManager):
             await self.show(show_mode)
 
     async def answer_callback(self) -> None:
-        if not isinstance(self.event, Callback):
+        if not isinstance(self.event, MessageCallback):
             return None
         if self.is_event_simulated():
             return None
         return await self.message_manager.answer_callback(
-            bot=self._data["bot"],
-            callback_query=self.event,
+            bot=self._ctx.bot,
+            callback=self.event.callback,
         )
 
     async def mark_closed(self) -> None:
@@ -221,10 +219,10 @@ class ManagerImpl(DialogManager):
         stack = self.current_stack()
         await storage.remove_context(stack.pop())
         if stack.empty():
-            self._data[CONTEXT_KEY] = None
+            setattr(self._ctx, CONTEXT_KEY, None)
         else:
             intent_id = stack.last_intent_id()
-            self._data[CONTEXT_KEY] = await storage.load_context(intent_id)
+            setattr(self._ctx, CONTEXT_KEY, await storage.load_context(intent_id))
         await storage.save_stack(stack)
 
     async def start(
@@ -256,7 +254,7 @@ class ManagerImpl(DialogManager):
         await storage.save_stack(stack)
         if remove_keyboard:
             await self._remove_kbd()
-        self._data[CONTEXT_KEY] = None
+        setattr(self._ctx, CONTEXT_KEY, None)
 
     async def _start_new_stack(
         self,
@@ -299,7 +297,7 @@ class ManagerImpl(DialogManager):
 
         context = stack.push(state, data)
         context.access_settings = deepcopy(access_settings)
-        self._data[CONTEXT_KEY] = context
+        setattr(self._ctx, CONTEXT_KEY, context)
         await self.dialog().process_start(self, data, state)
         new_context = self._current_context_unsafe()
         if new_context and context.id == new_context.id:
@@ -315,7 +313,7 @@ class ManagerImpl(DialogManager):
         if new_dialog.launch_mode is LaunchMode.SINGLE_TOP:  # noqa: SIM102
             if new_dialog is old_dialog:
                 await self.storage().remove_context(self.current_stack().pop())
-                self._data[CONTEXT_KEY] = None
+                setattr(self._ctx, CONTEXT_KEY, None)
 
     async def next(self, show_mode: Optional[ShowMode] = None) -> None:
         context = self.current_context()
@@ -369,7 +367,7 @@ class ManagerImpl(DialogManager):
             return  # no limitations for default stack
         if any(
             isinstance(button, MessageKeyboardButton)
-            for button in new_message.reply_markup
+            for button in itertools.chain(*new_message.keyboard)
         ):
             raise InvalidKeyboardType(
                 "Cannot use ReplyKeyboardMarkup in non default stack",
@@ -378,7 +376,7 @@ class ManagerImpl(DialogManager):
     async def show(self, show_mode: Optional[ShowMode] = None) -> None:
         try:
             stack = self.current_stack()
-            bot = self._data["bot"]
+            bot = self._ctx.bot
             old_message = self._get_last_message()
             if self.show_mode is ShowMode.NO_UPDATE:
                 logger.debug("ShowMode is NO_UPDATE, skip rendering")
@@ -388,7 +386,6 @@ class ManagerImpl(DialogManager):
             new_message.show_mode = show_mode or self.show_mode
             if new_message.show_mode is ShowMode.AUTO:
                 new_message.show_mode = self._calc_show_mode()
-            await self._fix_cached_media_id(new_message)
 
             self._ensure_stack_compatible(stack, new_message)
 
@@ -404,71 +401,41 @@ class ManagerImpl(DialogManager):
                 logger.debug("MessageNotModified, not storing ids")
             else:
                 self._save_last_message(sent_message)
-                if new_message.media:
-                    await self.media_id_storage.save_media_id(
-                        path=new_message.media.path,
-                        url=new_message.media.url,
-                        type=new_message.media.type,
-                        media_id=MediaId(
-                            sent_message.media_id,
-                            sent_message.media_uniq_id,
-                        ),
-                    )
-            if isinstance(self.event, Message):
-                # TODO: ???
-                stack.last_income_media_group_id = self.event.media_group_id
         except Exception as e:
-            # execute only on version >= 3.11
-            if sys.version_info >= (3, 11):
-                current_state = self.current_context().state
-                e.add_note(f"maxo-dialog state: {current_state}")
+            current_state = self.current_context().state
+            e.add_note(f"maxo-dialog state: {current_state}")
             raise
-
-    async def _fix_cached_media_id(self, new_message: NewMessage):
-        if not new_message.media or new_message.media.file_id:
-            return
-        new_message.media.file_id = await self.media_id_storage.get_media_id(
-            path=new_message.media.path,
-            url=new_message.media.url,
-            type=new_message.media.type,
-        )
 
     def is_event_simulated(self):
         return bool(self.middleware_data.get(EVENT_SIMULATED))
 
     def _get_message_from_callback(
         self,
-        event: Callback,
+        event: MessageCallback,
     ) -> Optional[OldMessage]:
         current_message = event.message
         stack = self.current_stack()
-        event_context = cast(
-            "EventContext",
-            self.middleware_data.get(EVENT_CONTEXT_KEY),
-        )
         if isinstance(current_message, Message):
-            media_id = get_media_id(current_message)
             return OldMessage(
-                media_id=(media_id.file_id if media_id else None),
-                media_uniq_id=(media_id.file_unique_id if media_id else None),
                 text=current_message.unsafe_body.text,
-                has_reply_keyboard=self.is_event_simulated(),
-                chat=event_context.chat,
-                message_id=current_message.unsafe_body.id,
-                content_type=current_message.content_type,  # TODO: ???
+                recipient=current_message.recipient,
+                message_id=current_message.unsafe_body.mid,
+                sequence_id=current_message.unsafe_body.seq,
+                attachments=current_message.unsafe_body.attachments or [],
             )
         elif not stack or not stack.last_message_id:
             return None
         else:
             return OldMessage(
-                media_id=None,
-                media_uniq_id=None,
                 text=UnknownText.UNKNOWN,
-                has_protected_content=stack.has_protected_content,
-                has_reply_keyboard=self.is_event_simulated(),
-                chat=event_context.chat,
+                recipient=Recipient(
+                    user_id=event.callback.user.user_id,
+                    chat_id=None,
+                    chat_type=ChatType.DIALOG,
+                ),
                 message_id=stack.last_message_id,
-                content_type=stack.content_type,
+                sequence_id=stack.last_sequence_id,
+                attachments=stack.last_attachments,
             )
 
     def _get_last_message(self) -> Optional[OldMessage]:
@@ -476,7 +443,7 @@ class ManagerImpl(DialogManager):
             event = self.event.update.event
         else:
             event = self.event
-        if isinstance(event, MessageCallbackFacade):
+        if isinstance(event, MessageCallback):
             return self._get_message_from_callback(event)
 
         stack = self.current_stack()
@@ -484,45 +451,32 @@ class ManagerImpl(DialogManager):
             return None
         event_context: EventContext = self.middleware_data[EVENT_CONTEXT_KEY]
         return OldMessage(
-            media_id=stack.last_media_id,
-            media_uniq_id=stack.last_media_unique_id,
             text=UnknownText.UNKNOWN,
-            has_protected_content=stack.has_protected_content,
-            has_reply_keyboard=stack.last_reply_keyboard,
-            chat=event_context.chat,
+            recipient=Recipient(
+                chat_id=event_context.chat_id,
+                chat_type=event_context.chat_type,
+                user_id=event_context.user_id,
+            ),
             message_id=stack.last_message_id,
-            content_type=stack.content_type,
+            sequence_id=stack.last_sequence_id,
+            attachments=stack.last_attachments,
         )
 
     def _save_last_message(self, message: OldMessage) -> None:
         stack = self.current_stack()
         stack.last_message_id = message.message_id
-        stack.last_media_id = message.media_id
-        stack.last_media_unique_id = message.media_uniq_id
-        stack.last_reply_keyboard = message.has_reply_keyboard
-        stack.content_type = message.content_type
-        stack.has_protected_content = message.has_protected_content
+        stack.last_sequence_id = message.sequence_id
+        stack.last_attachments = message.attachments
 
     def _calc_show_mode(self) -> ShowMode:
         if self.show_mode is not ShowMode.AUTO:
             return self.show_mode
-        if self.middleware_data["event_chat"].type != ChatType.DIALOG:
+        if self.middleware_data[UPDATE_CONTEXT_KEY].chat_type != ChatType.DIALOG:
             return ShowMode.EDIT
-        if self.current_stack().last_reply_keyboard:
-            return ShowMode.DELETE_AND_SEND
         if self.current_stack().id != DEFAULT_STACK_ID:
             return ShowMode.EDIT
         if isinstance(self.event, Message):
-            # TODO: ???
-            if self.event.media_group_id is None:
-                return ShowMode.SEND
-            elif (
-                self.event.media_group_id
-                == self.current_stack().last_income_media_group_id
-            ):
-                return ShowMode.EDIT
-            else:
-                return ShowMode.SEND
+            return ShowMode.SEND
         return ShowMode.EDIT
 
     async def update(
@@ -541,7 +495,7 @@ class ManagerImpl(DialogManager):
 
     def _get_fake_user(self, user_id: Optional[int] = None) -> User:
         """Get User if we have info about him or FakeUser instead."""
-        current_user = self.event.from_user
+        current_user = self.event.sender
         if user_id is None or user_id == current_user.id:
             return current_user
         return FakeUser(
@@ -553,15 +507,14 @@ class ManagerImpl(DialogManager):
 
     def _get_fake_chat(self, chat_id: Optional[int] = None) -> Chat:
         """Get Chat if we have info about him or FakeChat instead."""
-        if "event_chat" in self._data:
-            current_chat = self._data["event_chat"]
+        if current_chat := getattr(self._ctx, UPDATE_CONTEXT_KEY, None):
             if chat_id in (None, current_chat.id):
                 return current_chat
         elif chat_id is None:
             raise ValueError(
                 "Explicit `chat_id` is required " "for events without current chat",
             )
-        return FakeChat(
+        return FakeRecipient(
             chat_id=chat_id,
             type="",
             is_public=False,
@@ -575,8 +528,6 @@ class ManagerImpl(DialogManager):
         user_id: Optional[int] = None,
         chat_id: Optional[int] = None,
         stack_id: Optional[str] = None,
-        thread_id: Union[int, None, UnsetId] = UnsetId.UNSET,
-        business_connection_id: Union[str, None, UnsetId] = UnsetId.UNSET,
         load: bool = False,
     ) -> BaseDialogManager:
         user = self._get_fake_user(user_id)
@@ -588,8 +539,11 @@ class ManagerImpl(DialogManager):
         )
         new_event_context = EventContext(
             bot=event_context.bot,
-            chat=chat,
             user=user,
+            user_id=user.id,
+            chat=chat,
+            chat_type=chat.type,
+            chat_id=chat_id,
         )
 
         if stack_id is None:
@@ -602,9 +556,8 @@ class ManagerImpl(DialogManager):
 
         return BgManager(
             user=new_event_context.user,
-            chat=new_event_context.chat,
+            chat_id=new_event_context.update_context.chat_id,
             bot=new_event_context.bot,
-            router=self._router,
             intent_id=intent_id,
             stack_id=stack_id,
             load=load,
@@ -616,4 +569,4 @@ class ManagerImpl(DialogManager):
         del self.media_id_storage
         del self.message_manager
         del self._event
-        del self._data
+        # del self._ctx

@@ -1,12 +1,12 @@
 from datetime import datetime
 from logging import getLogger
-from typing import Any, Optional, Union
+from typing import Any, Optional
 
-from maxo import Bot
-from maxo.enums import ChatStatusType
+from maxo import Bot, Dispatcher
+from maxo.enums import ChatStatusType, ChatType
 from maxo.fsm import State
 from maxo.routing.interfaces import Router
-from maxo.types import Chat, User
+from maxo.types import User
 from maxo_dialog.api.entities import (
     DEFAULT_STACK_ID,
     AccessSettings,
@@ -21,16 +21,15 @@ from maxo_dialog.api.entities import (
     StartMode,
 )
 from maxo_dialog.api.internal import (
-    FakeChat,
+    FakeRecipient,
     FakeUser,
 )
 from maxo_dialog.api.protocols import (
     BaseDialogManager,
     BgManagerFactory,
-    UnsetId,
 )
 from maxo_dialog.manager.updater import Updater
-from maxo_dialog.utils import is_chat_loaded, is_user_loaded
+from maxo_dialog.utils import is_user_loaded
 
 logger = getLogger(__name__)
 
@@ -39,26 +38,28 @@ class BgManager(BaseDialogManager):
     def __init__(
         self,
         user: User,
-        chat: Chat,
+        chat_id: int | None,
         bot: Bot,
-        router: Router,
+        dp: Dispatcher,
         intent_id: Optional[str],
         stack_id: Optional[str],
         load: bool = False,
-    ):
+    ) -> None:
         self._event_context = EventContext(
-            chat=chat,
+            chat_id=chat_id,
+            user_id=user.id,
+            chat_type=ChatType.DIALOG,  # FIXME
             user=user,
+            chat=None,
             bot=bot,
         )
-        self._router = router
-        self._updater = Updater(router)
+        self._router = dp
+        self._updater = Updater(dp)
         self.intent_id = intent_id
         self.stack_id = stack_id
         self.load = load
 
     def _get_fake_user(self, user_id: Optional[int] = None) -> User:
-        """Get User if we have info about him or FakeUser instead."""
         if user_id is None or user_id == self._event_context.user.id:
             return self._event_context.user
         return FakeUser(
@@ -68,35 +69,22 @@ class BgManager(BaseDialogManager):
             last_activity_time=datetime.now(),
         )
 
-    def _get_fake_chat(self, chat_id: Optional[int] = None) -> Chat:
-        """Get Chat if we have info about him or FakeChat instead."""
-        if chat_id is None or chat_id == self._event_context.chat.id:
-            return self._event_context.chat
-        return FakeChat(
-            chat_id=chat_id,
-            type="",
-            is_public=False,
-            last_event_time=datetime.now(),
-            participants_count=1,
-            status=ChatStatusType.ACTIVE,
-        )
-
     def bg(
         self,
         user_id: Optional[int] = None,
         chat_id: Optional[int] = None,
         stack_id: Optional[str] = None,
-        thread_id: Union[int, None, UnsetId] = UnsetId.UNSET,
-        business_connection_id: Union[str, None, UnsetId] = UnsetId.UNSET,
         load: bool = False,
     ) -> "BaseDialogManager":
-        chat = self._get_fake_chat(chat_id)
         user = self._get_fake_user(user_id)
 
         new_event_context = EventContext(
             bot=self._event_context.bot,
-            chat=chat,
             user=user,
+            chat_id=chat_id,
+            user_id=user_id,
+            chat_type=ChatType.DIALOG,  # FIXME
+            chat=None,
         )
         if stack_id is None:
             if self._event_context == new_event_context:
@@ -110,9 +98,9 @@ class BgManager(BaseDialogManager):
 
         return BgManager(
             user=new_event_context.user,
-            chat=new_event_context.chat,
+            chat_id=new_event_context.update_context.chat_id,
             bot=new_event_context.bot,
-            router=self._router,
+            dp=self._router,
             intent_id=intent_id,
             stack_id=stack_id,
             load=load,
@@ -135,22 +123,14 @@ class BgManager(BaseDialogManager):
     async def _load(self) -> None:
         if self.load:
             bot = self._event_context.bot
-            if not is_chat_loaded(self._event_context.chat):
-                logger.debug(
-                    "load chat: %s",
-                    self._event_context.chat.id,
-                )
-                self._event_context.chat = await bot.get_chat(
-                    chat_id=self._event_context.chat.id,
-                )
             if not is_user_loaded(self._event_context.user):
                 logger.debug(
                     "load user %s from chat %s",
-                    self._event_context.chat.id,
-                    self._event_context.user.id,
+                    self._event_context.user_id,
+                    self._event_context.chat_id,
                 )
                 chat_member = await bot.get_chat_member(
-                    self._event_context.chat.id,
+                    self._event_context.chat_id,
                     self._event_context.user.id,
                 )
                 self._event_context.user = chat_member
@@ -233,11 +213,9 @@ class BgManagerFactoryImpl(BgManagerFactory):
         user_id: int,
         chat_id: int,
         stack_id: Optional[str] = None,
-        thread_id: Optional[int] = None,
-        business_connection_id: Optional[str] = None,
         load: bool = False,
     ) -> "BaseDialogManager":
-        chat = FakeChat(
+        chat = FakeRecipient(
             chat_id=chat_id,
             type="",
             is_public=False,

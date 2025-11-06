@@ -1,7 +1,9 @@
 from logging import getLogger
 from typing import Optional
 
-from maxo.enums import ChatType
+from maxo.routing.ctx import Ctx
+from maxo.routing.middlewares.event_context import EVENT_FROM_USER_KEY
+from maxo.types import User
 from maxo_dialog import ChatEvent
 from maxo_dialog.api.entities import (
     Context,
@@ -18,20 +20,22 @@ class DefaultAccessValidator(StackAccessValidator):
         stack: Stack,
         context: Optional[Context],
         event: ChatEvent,
-        data: dict,
+        ctx: Ctx,
     ) -> bool:
         if context:
             access_settings = context.access_settings
         else:
             access_settings = stack.access_settings
 
-        if not access_settings:
+        # if everything is disabled, it is allowed
+        if access_settings is None:
             return True
-        chat = data["event_chat"]
-        if chat.type is ChatType.DIALOG:
+        if not (access_settings.user_ids or access_settings.custom):
             return True
-        if access_settings.user_ids:
-            user = data["event_from_user"]
-            if user.id not in access_settings.user_ids:
-                return False
-        return True
+
+        # check user
+        user: User = getattr(ctx, EVENT_FROM_USER_KEY)
+        if user.id in access_settings.user_ids:
+            return True
+
+        return False

@@ -2,11 +2,13 @@ import asyncio
 from collections.abc import MutableMapping
 from typing import Any
 
-from maxo import loggers
+from maxo import Bot, loggers
+from maxo.fsm.key_builder import BaseKeyBuilder, DefaultKeyBuilder
 from maxo.fsm.storages.base import BaseEventIsolation, BaseStorage
 from maxo.fsm.storages.memory import MemoryStorage, SimpleEventIsolation
 from maxo.routing.ctx import Ctx
 from maxo.routing.middlewares.error import ErrorMiddleware
+from maxo.routing.middlewares.event_context import EventContextMiddleware
 from maxo.routing.middlewares.fsm_context import FSMContextMiddleware
 from maxo.routing.middlewares.update_context import UpdateContextMiddleware
 from maxo.routing.observers.signal import SignalObserver
@@ -31,24 +33,30 @@ class Dispatcher(SimpleRouter):
         # State system settings
         storage: BaseStorage | None = None,
         event_isolation: BaseEventIsolation | None = None,
+        key_builder: BaseKeyBuilder | None = None,
     ) -> None:
         super().__init__(self.__class__.__name__)
 
         self.workflow_data = workflow_data or {}
         self.workflow_data["dispatcher"] = self
+        self.workflow_data["router"] = self
 
-        self.update = self._observers[Update] = SignalObserver()
+        self.update = self._observers[Update] = SignalObserver[Update]()
         self.update.middleware.outer(ErrorMiddleware(self))
+        self.update.middleware.outer(EventContextMiddleware())
         self.update.middleware.outer(UpdateContextMiddleware())
 
         self.update.handler(self._feed_update_handler)
 
         # State system settings
+        if key_builder is None:
+            key_builder = DefaultKeyBuilder()
+
         if storage is None:
-            storage = MemoryStorage()
+            storage = MemoryStorage(key_builder=key_builder)
 
         if event_isolation is None:
-            event_isolation = SimpleEventIsolation()
+            event_isolation = SimpleEventIsolation(key_builder=key_builder)
 
         self.update.middleware.outer(FSMContextMiddleware(storage, event_isolation))
 
@@ -56,14 +64,14 @@ class Dispatcher(SimpleRouter):
 
         self.update.middleware.outer(FacadeMiddleware())
 
-    async def feed_max_update(self, update: Update[Any]) -> Any:
+    async def feed_max_update(self, update: Update[Any], bot: Bot | None = None) -> Any:
         loop = asyncio.get_running_loop()
         start_time = loop.time()
 
         result = UNHANDLED
 
         try:
-            result = await self.feed_update(update)
+            result = await self.feed_update(update, bot)
         except Exception:
             duration = (loop.time() - start_time) * 1000
             loggers.dispatcher.exception(
@@ -85,18 +93,18 @@ class Dispatcher(SimpleRouter):
             )
         return result
 
-    async def feed_signal(self, signal: BaseSignal) -> Any:
-        return await self.feed_update(signal)
+    async def feed_signal(self, signal: BaseSignal, bot: Bot | None = None) -> Any:
+        return await self.feed_update(signal, bot)
 
-    async def feed_update(self, update: BaseUpdate) -> Any:
-        ctx = Ctx.factory(update, self.workflow_data)
+    async def feed_update(self, update: BaseUpdate, bot: Bot | None = None) -> Any:
+        ctx = Ctx.factory(update, {**self.workflow_data, "bot": bot})
         return await self.trigger(ctx)
 
     async def _feed_update_handler(
         self,
         ctx: Ctx[Update[Any]],
     ) -> Any:
-        ctx = Ctx.factory(ctx.update.update, ctx._state._data)
+        ctx = Ctx.factory(ctx.update.update, ctx.raw_data)
         return await self.trigger(ctx)
 
     async def _emit_before_startup_handler(self, ctx: Ctx[BeforeStartup]) -> None:

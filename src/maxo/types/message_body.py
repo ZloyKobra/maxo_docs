@@ -36,3 +36,7 @@ class MessageBody(MaxoType):
             if isinstance(attachment, InlineKeyboardAttachment):
                 return attachment.payload
         return None
+
+    @property
+    def reply_markup(self) -> Keyboard | None:
+        return self.keyboard

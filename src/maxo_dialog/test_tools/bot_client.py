@@ -3,23 +3,20 @@ from datetime import datetime
 from typing import Any, Optional, Union
 
 from maxo import Bot, Dispatcher
-from maxo.bot.methods import CallbackAnswer
-from maxo.bot.methods.base import MaxoMethod
-from maxo.enums import ChatStatusType, ChatType
-from maxo.routing.updates.base import MaxUpdate
+from maxo.bot.state import InitialBotState
+from maxo.enums import ChatStatusType, ChatType, MessageLinkType
+from maxo.routing.signals import Update
+from maxo.routing.updates import MessageCallback, MessageCreated
 from maxo.types import (
+    BotInfo,
     Callback,
-    # ChatJoinRequest,
-    # ChatMemberAdministrator,
-    # ChatMemberBanned,
-    # ChatMemberLeft,
-    # ChatMemberMember,
-    # ChatMemberOwner,
-    # ChatMemberRestricted,
-    # ChatMemberUpdated,
     CallbackKeyboardButton,
     Chat,
+    LinkedMessage,
     Message,
+    MessageBody,
+    MessageStat,
+    Recipient,
     User,
 )
 
@@ -28,21 +25,15 @@ from .keyboard import InlineButtonLocator
 
 class FakeBot(Bot):
     def __init__(self):
-        pass  # do not call super, so it is invalid bot, used only as a stub
-
-    @property
-    def id(self):
-        return 1
-
-    async def __call__(
-        self,
-        method: MaxoMethod[Any],
-        request_timeout: Optional[int] = None,
-    ) -> Any:
-        del request_timeout  # unused
-        if isinstance(method, CallbackAnswer):
-            return True
-        raise RuntimeError("Fake bot should not be used to call telegram")
+        super().__init__("", False)
+        info = BotInfo(
+            user_id=1,
+            first_name="bot",
+            username="bot",
+            is_bot=True,
+            last_activity_time=datetime.fromtimestamp(1234567890),
+        )
+        self._state = InitialBotState(info=info, api_client=None)
 
     def __hash__(self) -> int:
         return 1
@@ -103,37 +94,59 @@ class BotClient:
         text: str,
         reply_to: Optional[Message],
     ):
+        message_seq = self._new_message_id()
         return Message(
-            id=self._new_message_id(),
-            date=datetime.fromtimestamp(1234567890),
-            chat=self.chat,
-            from_user=self.user,
-            text=text,
-            reply_to_message=reply_to,
+            sender=self.user,
+            recipient=Recipient(
+                chat_type=ChatType.DIALOG,
+                user_id=self.bot.state.info.user_id,
+                chat_id=self.chat.chat_id,
+            ),
+            timestamp=datetime.fromtimestamp(1234567890),
+            link=(
+                LinkedMessage(
+                    type=MessageLinkType.REPLY,
+                    sender=reply_to.sender,
+                    chat_id=reply_to.recipient.chat_id,
+                    message=reply_to.unsafe_body,
+                )
+                if reply_to
+                else None
+            ),
+            body=MessageBody(
+                mid=str(message_seq),
+                seq=message_seq,
+                text=text,
+            ),
+            stat=MessageStat(
+                views=1,
+            ),
+            url="https://max.ru/",
         )
 
     async def send(self, text: str, reply_to: Optional[Message] = None):
-        return await self.dp.feed_update(
-            self.bot,
-            MaxUpdate(
-                update_id=self._new_update_id(),
-                message=self._new_message(text, reply_to),
+        return await self.dp.feed_max_update(
+            Update(
+                update=MessageCreated(
+                    message=self._new_message(text, reply_to),
+                    timestamp=datetime.fromtimestamp(1234567890),
+                    user_locale="ru",
+                ),
             ),
+            self.bot,
         )
 
     def _new_callback(
         self,
-        message: Message,
         button: CallbackKeyboardButton,
     ) -> Callback:
-        if not button.callback_data:
+        if not button.payload:
             raise ValueError("Button has no callback data")
         return Callback(
-            id=str(uuid.uuid4()),
-            data=button.callback_data,
-            chat_instance="--",
-            from_user=self.user,
-            message=message,
+            timestamp=datetime.fromtimestamp(1234567890),
+            callback_id=str(uuid.uuid4()),
+            payload=button.payload,
+            user=self.user,
         )
 
     async def click(
@@ -147,45 +160,14 @@ class BotClient:
                 f"No button matching {locator} found",
             )
 
-        callback = self._new_callback(message, button)
+        callback = self._new_callback(button)
         await self.dp.feed_update(
-            self.bot,
-            MaxUpdate(
-                update_id=self._new_update_id(),
-                callback_query=callback,
+            MessageCallback(
+                timestamp=datetime.fromtimestamp(1234567890),
+                callback=callback,
+                message=message,
+                user_locale="ru",
             ),
-        )
-        return callback.id
-
-    async def request_chat_join(self):
-        return await self.dp.feed_update(
             self.bot,
-            MaxUpdate(
-                update_id=self._new_update_id(),
-                chat_join_request=ChatJoinRequest(
-                    chat=self.chat,
-                    from_user=self.user,
-                    date=datetime.fromtimestamp(1234567890),
-                    user_chat_id=self.user.id,
-                ),
-            ),
         )
-
-    async def my_chat_member_update(
-        self,
-        old_chat_member: ChatMember,
-        new_chat_member: ChatMember,
-    ):
-        return await self.dp.feed_update(
-            self.bot,
-            MaxUpdate(
-                update_id=self._new_update_id(),
-                my_chat_member=ChatMemberUpdated(
-                    chat=self.chat,
-                    from_user=self.user,
-                    date=datetime.fromtimestamp(1234567890),
-                    old_chat_member=old_chat_member,
-                    new_chat_member=new_chat_member,
-                ),
-            ),
-        )
+        return callback.callback_id

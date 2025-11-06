@@ -76,6 +76,10 @@ class Ctx(GenericExtensions[_UpdateT, _CtxDataT]):
     def raw_data(self) -> MutableMapping[str, Any]:
         return self._state.raw_data
 
+    @property
+    def ctx(self) -> Self:
+        return self
+
     @classmethod
     def factory(
         cls,
@@ -95,14 +99,21 @@ class Ctx(GenericExtensions[_UpdateT, _CtxDataT]):
     def __getattr__(self, name: str) -> Any:
         return getattr(self._state, name)
 
+    def __getitem__(self, key: str) -> Any:
+        return self.__getattr__(key)
+
     def __setattr__(self, name: str, value: Any) -> Any:
         setattr(self._state, name, value)
+        return value
+
+    def __setitem__(self, name: str, value: Any) -> Any:
+        return self.__setattr__(name, value)
 
     if TYPE_CHECKING:
         from maxo.bot.bot import Bot
         from maxo.fsm.manager import FSMContext
         from maxo.fsm.storages.base import BaseStorage
-        from maxo.tools.dispatcher import Dispatcher
+        from maxo.routing.dispatcher import Dispatcher
         from maxo.tools.facades.updates.base import BaseUpdateFacade
         from maxo.types.update_context import UpdateContext
 

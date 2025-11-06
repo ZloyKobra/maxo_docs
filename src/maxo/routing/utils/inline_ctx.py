@@ -51,6 +51,9 @@ def inline_ctx(func: Any) -> Any:
             inline_paramater: getattr(ctx, inline_paramater)
             for inline_paramater in inline_paramaters
         }
+        if "ctx" in inline_kwargs:
+            kwargs.pop("ctx")
+
         return await func(*args, **kwargs, **inline_kwargs)
 
     return handler

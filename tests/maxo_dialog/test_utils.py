@@ -1,12 +1,14 @@
-from aiogram.types import Chat, User
+from aiogram.types import User
 
-from aiogram_dialog.api.internal import FakeChat, FakeUser
-from aiogram_dialog.utils import is_chat_loaded, is_user_loaded
+from maxo.enums import ChatType
+from maxo.types import Recipient
+from maxo_dialog.api.internal import FakeRecipient, FakeUser
+from maxo_dialog.utils import is_recipient_loaded, is_user_loaded
 
 
-def test_is_chat_loaded():
-    assert is_chat_loaded(Chat(id=1, type="private"))
-    assert not is_chat_loaded(FakeChat(id=1, type="private"))
+def test_is_recipient_loaded():
+    assert is_recipient_loaded(Recipient(chat_id=1, user_id=1, type=ChatType.DIALOG))
+    assert not is_recipient_loaded(FakeRecipient(chat_id=1, user_id=1, type=ChatType.DIALOG))
 
 
 def test_is_user_loaded():

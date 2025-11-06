@@ -11,21 +11,20 @@ from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, Callable, MutableMapping, cast
 
 from maxo.fsm import State
-from maxo.fsm.event_isolations import BaseEventIsolation
 from maxo.fsm.key_builder import (
+    BaseKeyBuilder,
     DefaultKeyBuilder,
-    KeyBuilder,
     StorageKey,
     StorageKeyType,
 )
-from maxo.fsm.storages.base import BaseStorage
+from maxo.fsm.storages.base import BaseEventIsolation, BaseStorage
 
 
 class RedisStorage(BaseStorage):
     def __init__(
         self,
         redis: Redis,
-        key_builder: KeyBuilder | None = None,
+        key_builder: BaseKeyBuilder | None = None,
         state_ttl: ExpiryT | None = None,
         data_ttl: ExpiryT | None = None,
         json_loads: Callable[[Any], Any] = json.loads,
@@ -112,7 +111,7 @@ class RedisEventIsolation(BaseEventIsolation):
     def __init__(
         self,
         redis: Redis,
-        key_builder: KeyBuilder | None = None,
+        key_builder: BaseKeyBuilder | None = None,
         lock_kwargs: dict[str, Any] | None = None,
     ) -> None:
         if key_builder is None:

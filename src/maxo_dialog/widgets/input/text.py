@@ -10,6 +10,7 @@ from typing import (
 )
 
 from maxo.enums import AttachmentType
+from maxo.routing.updates import MessageCreated
 from maxo.types import Message
 from maxo_dialog.api.protocols import DialogManager, DialogProtocol
 from maxo_dialog.tools.filter_object import FilterObject
@@ -71,7 +72,7 @@ class TextInput(BaseInput, Generic[T]):
 
     async def process_message(
         self,
-        message: Message,
+        message: MessageCreated,
         dialog: DialogProtocol,
         manager: DialogManager,
     ) -> bool:

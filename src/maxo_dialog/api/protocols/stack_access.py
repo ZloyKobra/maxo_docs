@@ -1,6 +1,7 @@
 from abc import abstractmethod
 from typing import Optional, Protocol
 
+from maxo import Ctx
 from maxo_dialog import ChatEvent
 from maxo_dialog.api.entities import Context, Stack
 
@@ -12,7 +13,7 @@ class StackAccessValidator(Protocol):
         stack: Stack,
         context: Optional[Context],
         event: ChatEvent,
-        data: dict,
+        ctx: Ctx,
     ) -> bool:
         """Check if current user is allowed to interactor with dialog."""
         raise NotImplementedError

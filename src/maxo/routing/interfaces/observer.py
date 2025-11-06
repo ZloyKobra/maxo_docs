@@ -58,6 +58,7 @@ class Observer(Protocol[_UpdateT, _HandlerT, _HandlerFnT]):
         self,
         handler_fn: _HandlerFnT,
         filter: Filter[_UpdateT] | None = None,
+        inline_ctx: Callable | None = None,  # TODO: Типизация
     ) -> _HandlerFnT:
         raise NotImplementedError
 

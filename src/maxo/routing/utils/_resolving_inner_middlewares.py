@@ -13,10 +13,11 @@ def resolve_middlewares(
     ],
 ) -> None:
     for update_tp, observer in router.observers.items():
-        middlewares = (*middlewares_map[update_tp],)
+        new_middlewares = (*middlewares_map[update_tp],)
+        current_middlewares = (*observer.middleware.inner._middlewares,)
 
-        observer.middleware.inner._middlewares.extend(middlewares)
-        middlewares_map[update_tp].extend(middlewares)
+        observer.middleware.inner._middlewares.extend(new_middlewares)
+        middlewares_map[update_tp].extend(current_middlewares)
 
 
 @overload

@@ -186,6 +186,10 @@ class MaxApiClient(AiohttpClient):
                     for_marker(QueryParamMarker, P[None]),
                     lambda x: "null",
                 ),
+                dumper(
+                    for_marker(QueryParamMarker, P[bool]),
+                    lambda x: int(x),
+                ),
             ]
         )
         if self._warming_up:

@@ -1,3 +1,4 @@
+from maxo import Ctx
 from maxo.routing.interfaces import Router
 from maxo_dialog.api.entities import ChatEvent
 from maxo_dialog.api.internal import DialogManagerFactory
@@ -23,13 +24,13 @@ class DefaultManagerFactory(DialogManagerFactory):
     def __call__(
         self,
         event: ChatEvent,
-        data: dict,
+        ctx: Ctx,
         registry: DialogRegistryProtocol,
         router: Router,
     ) -> DialogManager:
         return ManagerImpl(
             event=event,
-            data=data,
+            ctx=ctx,
             message_manager=self.message_manager,
             media_id_storage=self.media_id_storage,
             registry=registry,

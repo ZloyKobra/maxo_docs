@@ -55,7 +55,7 @@ class BaseCheckbox(Keyboard, ABC):
             [
                 CallbackKeyboardButton(
                     text=await self.text.render_text(data, manager),
-                    payload=self._item_callback_data(checked),
+                    payload=self._item_payload(checked),
                 ),
             ],
         ]

@@ -12,7 +12,12 @@ _ReturnT_co = TypeVar("_ReturnT_co", covariant=True)
 
 @runtime_checkable
 class UpdateHandlerFn(Protocol[_UpdateT, _ReturnT_co]):
-    async def __call__(self, update: _UpdateT, ctx: Ctx[_UpdateT]) -> _ReturnT_co: ...
+    async def __call__(
+        self,
+        update: _UpdateT,
+        /,
+        ctx: Ctx[_UpdateT],
+    ) -> _ReturnT_co: ...
 
 
 class UpdateHandler(
@@ -45,5 +50,5 @@ class UpdateHandler(
         return await self._filter(ctx.update, ctx)
 
     async def __call__(self, ctx: Ctx[_UpdateT, Any]) -> _ReturnT_co:
-        handler_fn_result = await self._handler_fn(update=ctx.update, ctx=ctx)
+        handler_fn_result = await self._handler_fn(ctx.update, ctx=ctx)
         return handler_fn_result

@@ -21,5 +21,5 @@ async def echo_handler(
     await facade.answer_text(text)
 
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 LongPolling(dispatcher).run(bot)

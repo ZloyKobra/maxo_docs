@@ -55,7 +55,7 @@ class ContainsTextFilter(BaseFilter[MessageCreated]):
 
 dispatcher = Dispatcher()
 dispatcher.message_created.middleware.inner(InnerMiddleware())
-dispatcher.message_created.middleware.outer(InnerMiddleware())
+dispatcher.message_created.middleware.outer(OuterMiddleware())
 
 
 @dispatcher.message_created((ContainsTextFilter("gojo") & ContainsTextFilter("maki")) | ContainsTextFilter("sukuna"))

@@ -770,9 +770,9 @@ class Calendar(Keyboard):
         create own implementation of views
         """
         return {
-            CalendarScope.DAYS: CalendarDaysView(self._item_callback_data),
-            CalendarScope.MONTHS: CalendarMonthView(self._item_callback_data),
-            CalendarScope.YEARS: CalendarYearsView(self._item_callback_data),
+            CalendarScope.DAYS: CalendarDaysView(self._item_payload),
+            CalendarScope.MONTHS: CalendarMonthView(self._item_payload),
+            CalendarScope.YEARS: CalendarYearsView(self._item_payload),
         }
 
     async def _get_user_config(

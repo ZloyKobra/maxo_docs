@@ -1,15 +1,16 @@
-from copy import deepcopy
 from datetime import datetime
 from typing import Optional
 from uuid import uuid4
 
 from maxo import Bot
+from maxo.enums import ChatType
 from maxo.types import (
     AudioAttachment,
     Callback,
     FileAttachment,
-    Keyboard,
     Message,
+    MessageBody,
+    Recipient,
     VideoAttachment,
 )
 from maxo_dialog import ShowMode
@@ -98,10 +99,12 @@ class MockMessageManager(MessageManagerProtocol):
         assert isinstance(old_message, OldMessage)
 
         message = Message(
-            message_id=old_message.message_id,
-            date=datetime.now(),
-            chat=old_message.chat,
-            reply_markup=None,
+            timestamp=datetime.now(),
+            recipient=Recipient(
+                chat_type=ChatType.DIALOG,
+                chat_id=old_message.recipient.chat_id,
+                user_id=old_message.recipient.chat_id,
+            ),
         )
         self.sent_messages.append(message)
         return message
@@ -109,9 +112,9 @@ class MockMessageManager(MessageManagerProtocol):
     async def answer_callback(
         self,
         bot: Bot,
-        callback_query: Callback,
+        callback: Callback,
     ) -> None:
-        self.answered_callbacks.add(callback_query.id)
+        self.answered_callbacks.add(callback.callback_id)
 
     def assert_answered(self, callback_id: str) -> None:
         assert callback_id in self.answered_callbacks
@@ -127,38 +130,24 @@ class MockMessageManager(MessageManagerProtocol):
         message_id = self.last_message_id + 1
         self.last_message_id = message_id
 
-        if new_message.media:
-            contents = {
-                "caption": new_message.text,
-                new_message.media.type: MEDIA_CLASSES[new_message.media.type](
-                    new_message.media,
+        self.sent_messages.append(
+            Message(
+                sender=bot.state.info,
+                recipient=new_message.recipient,
+                timestamp=datetime.now(),
+                body=MessageBody(
+                    mid=str(message_id),
+                    seq=message_id,
+                    text=new_message.text,
+                    attachments=new_message.attachments,
                 ),
-            }
-        else:
-            contents = {
-                "text": new_message.text,
-            }
-
-        message = Message(
-            message_id=message_id,
-            date=datetime.now(),
-            chat=new_message.chat,
-            reply_markup=deepcopy(new_message.reply_markup),
-            **contents,
+            )
         )
-        self.sent_messages.append(message)
 
         return OldMessage(
-            message_id=message_id,
-            chat=new_message.chat,
+            message_id=str(message_id),
+            sequence_id=message_id,
+            recipient=new_message.recipient,
             text=new_message.text,
-            media_id=(file_id(new_message.media) if new_message.media else None),
-            media_uniq_id=(
-                file_unique_id(new_message.media) if new_message.media else None
-            ),
-            has_reply_keyboard=isinstance(
-                new_message.reply_markup,
-                Keyboard,
-            ),
-            business_connection_id=None,
+            attachments=new_message.attachments,
         )

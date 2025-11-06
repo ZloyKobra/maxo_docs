@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, Generic, TypeVar
 
 from maxo.routing.ctx import Ctx
 from maxo.routing.handlers.signal import SignalHandler, SignalHandlerFn
@@ -6,6 +6,7 @@ from maxo.routing.interfaces.filter import Filter
 from maxo.routing.observers.base import BaseObserver
 from maxo.routing.sentinels import UNHANDLED
 from maxo.routing.signals.base import BaseSignal
+from maxo.routing.utils import inline_ctx as _inline_ctx
 
 _SignalT = TypeVar("_SignalT", bound=BaseSignal)
 _ReturnT_co = TypeVar("_ReturnT_co", covariant=True)
@@ -23,8 +24,12 @@ class SignalObserver(
         self,
         handler_fn: SignalHandlerFn[_SignalT, Any],
         filter: Filter[_SignalT] | None = None,
+        inline_ctx: Callable | None = _inline_ctx,
     ) -> SignalHandlerFn[_SignalT, Any]:
         self._state.ensure_add_handler()
+
+        if inline_ctx:
+            handler_fn = inline_ctx(handler_fn)
 
         self._handlers.append(SignalHandler(handler_fn, filter))
 

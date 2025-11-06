@@ -4,6 +4,7 @@ from typing import Optional, Union
 from maxo import Bot
 from maxo.enums import AttachmentType
 from maxo.errors import MaxBotApiError, MaxBotBadRequestError
+from maxo.tools.helpers import attachment_to_request
 from maxo.tools.upload_media import FSInputFile, InputFile
 from maxo.types import (
     Callback,
@@ -19,7 +20,6 @@ from maxo.types import (
 )
 from maxo_dialog.api.entities import (
     MediaAttachment,
-    MediaId,
     NewMessage,
     OldMessage,
     ShowMode,
@@ -28,7 +28,6 @@ from maxo_dialog.api.protocols import (
     MessageManagerProtocol,
     MessageNotModified,
 )
-from maxo_dialog.utils import get_media_id
 
 logger = getLogger(__name__)
 
@@ -48,20 +47,12 @@ _INVALID_QUERY_ID_MSG = (
 
 
 def _combine(sent_message: NewMessage, message_result: Message) -> OldMessage:
-    media_id = get_media_id(message_result)
     return OldMessage(
-        message_id=message_result.message_id,
-        chat=message_result.chat,
-        has_protected_content=message_result.has_protected_content,
-        has_reply_keyboard=isinstance(
-            sent_message.reply_markup,
-            ReplyKeyboardMarkup,
-        ),
-        text=message_result.text,
-        media_uniq_id=(media_id.file_unique_id if media_id else None),
-        media_id=(media_id.file_id if media_id else None),
-        business_connection_id=message_result.business_connection_id,
-        content_type=message_result.content_type,
+        message_id=message_result.unsafe_body.mid,
+        sequence_id=message_result.unsafe_body.seq,
+        recipient=message_result.recipient,
+        text=message_result.unsafe_body.text,
+        attachments=message_result.unsafe_body.attachments or [],
     )
 
 
@@ -69,11 +60,11 @@ class MessageManager(MessageManagerProtocol):
     async def answer_callback(
         self,
         bot: Bot,
-        callback_query: Callback,
+        callback: Callback,
     ) -> None:
         try:
             await bot.callback_answer(
-                callback_id=callback_query.callback_id,
+                callback_id=callback.callback_id,
             )
         except MaxBotApiError as e:
             if _INVALID_QUERY_ID_MSG in e.message.lower():
@@ -101,11 +92,6 @@ class MessageManager(MessageManagerProtocol):
     def need_media(self, new_message: NewMessage) -> bool:
         return bool(new_message.media)
 
-    def had_reply_keyboard(self, old_message: Optional[OldMessage]) -> bool:
-        if not old_message:
-            return False
-        return old_message.has_reply_keyboard
-
     def need_reply_keyboard(self, new_message: Optional[NewMessage]) -> bool:
         if not new_message:
             return False
@@ -127,16 +113,10 @@ class MessageManager(MessageManagerProtocol):
     ) -> bool:
         if (
             (new_message.text != old_message.text)
-            or
-            # we cannot actually compare reply keyboards
-            (new_message.reply_markup or old_message.has_reply_keyboard)
+            or (new_message.keyboard)
             or
             # we do not know if link preview changed
             new_message.link_preview_options
-            or (
-                bool(new_message.protect_content)
-                != bool(old_message.has_protected_content)
-            )
         ):
             return True
 
@@ -144,23 +124,10 @@ class MessageManager(MessageManagerProtocol):
             return True
         if not self.need_media(new_message):
             return False
-        old_media_id = MediaId(old_message.media_id, old_message.media_uniq_id)
-        if new_message.media.file_id != old_media_id:
-            return True
-
         return False
 
     def _can_edit(self, new_message: NewMessage, old_message: OldMessage) -> bool:
-        # we cannot edit message if media removed
-        if self.had_media(old_message) and not self.need_media(new_message):
-            return False
-        # we cannot edit a message if there was voice
-        if self.had_voice(old_message) or self.need_voice(new_message):
-            return False
-        return not (
-            self.had_reply_keyboard(old_message)
-            or self.need_reply_keyboard(new_message)
-        )
+        return True
 
     async def show_message(
         self,
@@ -176,13 +143,8 @@ class MessageManager(MessageManagerProtocol):
                 "Delete and send new message, because: mode=%s",
                 new_message.show_mode,
             )
-            # optimize order not to blink
-            if self.need_reply_keyboard(new_message):
-                sent_message = await self.send_message(bot, new_message)
-                await self.remove_message_safe(bot, old_message, new_message)
-            else:
-                await self.remove_message_safe(bot, old_message, new_message)
-                sent_message = await self.send_message(bot, new_message)
+            await self.remove_message_safe(bot, old_message, new_message)
+            sent_message = await self.send_message(bot, new_message)
             return _combine(new_message, sent_message)
         if not old_message or new_message.show_mode is ShowMode.SEND:
             logger.debug(
@@ -218,9 +180,9 @@ class MessageManager(MessageManagerProtocol):
         bot: Bot,
         show_mode: ShowMode,
         old_message: Optional[OldMessage],
-    ) -> Optional[Message]:
+    ) -> bool:
         if show_mode is ShowMode.NO_UPDATE:
-            return None
+            return False
         if show_mode is ShowMode.DELETE_AND_SEND and old_message:
             return await self.remove_message_safe(bot, old_message, None)
         return await self._remove_kbd(bot, old_message, None)
@@ -230,28 +192,29 @@ class MessageManager(MessageManagerProtocol):
         bot: Bot,
         old_message: Optional[OldMessage],
         new_message: Optional[NewMessage],
-    ) -> Optional[Message]:
-        if self.had_reply_keyboard(old_message):
-            if not self.need_reply_keyboard(new_message):
-                return await self.remove_reply_kbd(bot, old_message)
-            return None
-        else:
-            return await self.remove_inline_kbd(bot, old_message)
+    ) -> bool:
+        return await self.remove_inline_kbd(bot, old_message)
 
     async def remove_inline_kbd(
         self,
         bot: Bot,
         old_message: Optional[OldMessage],
-    ) -> Optional[Message]:
+    ) -> bool:
         if not old_message:
             return None
-        logger.debug("remove_inline_kbd in %s", old_message.chat)
+        logger.debug("remove_inline_kbd in %s", old_message.recipient)
         try:
-            return await bot.edit_message_reply_markup(
-                message_id=old_message.message_id,
-                chat_id=old_message.chat.id,
-                business_connection_id=old_message.business_connection_id,
-            )
+            new_attachments = [
+                attachment_to_request(attach)
+                for attach in old_message.attachments
+                if attach.type != AttachmentType.INLINE_KEYBOARD
+            ]
+            return (
+                await bot.edit_message(
+                    message_id=old_message.message_id,
+                    attachments=new_attachments,
+                )
+            ).success
         except MaxBotBadRequestError as err:
             if "message is not modified" in err.message:
                 pass  # nothing to remove
@@ -264,38 +227,18 @@ class MessageManager(MessageManagerProtocol):
             else:
                 raise err
 
-    async def remove_reply_kbd(
-        self,
-        bot: Bot,
-        old_message: Optional[OldMessage],
-    ) -> Optional[Message]:
-        if not old_message:
-            return None
-        logger.debug("remove_reply_kbd in %s", old_message.chat)
-        return await self.send_text(
-            bot=bot,
-            new_message=NewMessage(
-                chat=old_message.chat,
-                text="...",
-                reply_markup=ReplyKeyboardRemove(),
-                business_connection_id=old_message.business_connection_id,
-            ),
-        )
-
     async def remove_message_safe(
         self,
         bot: Bot,
         old_message: OldMessage,
         new_message: Optional[NewMessage],
-    ) -> None:
-        if old_message.business_connection_id:
-            await self._remove_kbd(bot, old_message, new_message)
-            return
+    ) -> bool:
         try:
             await bot.delete_message(
-                chat_id=old_message.chat.id,
+                chat_id=old_message.recipient.chat_id,
                 message_id=old_message.message_id,
             )
+            return True
         except MaxBotBadRequestError as err:
             if "message to delete not found" in err.message:
                 pass
@@ -304,7 +247,8 @@ class MessageManager(MessageManagerProtocol):
             else:
                 raise
 
-    # Edit
+        return False
+
     async def edit_message_safe(
         self,
         bot: Bot,
@@ -330,122 +274,26 @@ class MessageManager(MessageManagerProtocol):
         new_message: NewMessage,
         old_message: OldMessage,
     ) -> Message:
-        if bool(old_message.has_protected_content) != bool(new_message.protect_content):
-            await self.remove_message_safe(bot, old_message, new_message)
-            return await self.send_message(bot, new_message)
-
-        if new_message.media:
-            if (
-                old_message.media_id is not None
-                and new_message.media.file_id == old_message.media_id
-            ):
-                return await self.edit_caption(bot, new_message, old_message)
-            return await self.edit_media(bot, new_message, old_message)
-        else:
-            return await self.edit_text(bot, new_message, old_message)
-
-    async def edit_caption(
-        self,
-        bot: Bot,
-        new_message: NewMessage,
-        old_message: OldMessage,
-    ) -> Message:
-        logger.debug("edit_caption to %s", new_message.chat)
-        return await bot.edit_message_caption(
+        # TODO: Отправка медиа в несколько шагов
+        await bot.edit_message(
+            link=new_message.link_to,
             message_id=old_message.message_id,
-            chat_id=old_message.chat.id,
-            business_connection_id=new_message.business_connection_id,
-            caption=new_message.text,
-            reply_markup=new_message.reply_markup,
-            parse_mode=new_message.parse_mode,
-        )
-
-    async def edit_text(
-        self,
-        bot: Bot,
-        new_message: NewMessage,
-        old_message: OldMessage,
-    ) -> Message:
-        logger.debug("edit_text to %s", new_message.chat)
-        return await bot.edit_message_text(
-            message_id=old_message.message_id,
-            chat_id=old_message.chat.id,
-            business_connection_id=new_message.business_connection_id,
             text=new_message.text,
-            reply_markup=new_message.reply_markup,
-            parse_mode=new_message.parse_mode,
-            link_preview_options=new_message.link_preview_options,
+            attachments=new_message.attachments,
+            format=new_message.parse_mode,
         )
+        return await bot.get_message(message_id=old_message.message_id)
 
-    async def edit_media(
-        self,
-        bot: Bot,
-        new_message: NewMessage,
-        old_message: OldMessage,
-    ) -> Message:
-        logger.debug(
-            "edit_media to %s, media_id: %s",
-            new_message.chat,
-            new_message.media.file_id,
-        )
-        media = INPUT_MEDIA_TYPES[new_message.media.type](
-            caption=new_message.text,
-            reply_markup=new_message.reply_markup,
-            parse_mode=new_message.parse_mode,
-            media=await self.get_media_source(new_message.media, bot),
-            **new_message.media.kwargs,
-        )
-        return await bot.edit_message_media(
-            message_id=old_message.message_id,
-            chat_id=old_message.chat.id,
-            media=media,
-            reply_markup=new_message.reply_markup,
-        )
-
-    # Send
     async def send_message(self, bot: Bot, new_message: NewMessage) -> Message:
-        if new_message.media:
-            return await self.send_media(bot, new_message)
-        else:
-            return await self.send_text(bot, new_message)
-
-    async def send_text(self, bot: Bot, new_message: NewMessage) -> Message:
-        logger.debug(
-            "send_text to chat %s, thread %s, business_id %s",
-            new_message.chat.id,
-            new_message.thread_id,
-            new_message.business_connection_id,
-        )
-        return await bot.send_message(
-            new_message.chat.id,
+        # TODO: Отправка медиа в несколько шагов
+        result = await bot.send_message(
+            chat_id=new_message.recipient.chat_id,
+            user_id=new_message.recipient.user_id,
             text=new_message.text,
-            message_thread_id=new_message.thread_id,
-            business_connection_id=new_message.business_connection_id,
-            reply_markup=new_message.reply_markup,
-            parse_mode=new_message.parse_mode,
-            protect_content=new_message.protect_content,
-            link_preview_options=new_message.link_preview_options,
+            link=new_message.link_to,
+            notify=True,
+            attachments=new_message.attachments,
+            format=new_message.parse_mode,
+            disable_link_preview=False,  # FIXME
         )
-
-    async def send_media(self, bot: Bot, new_message: NewMessage) -> Message:
-        logger.debug(
-            "send_media to %s, media_id: %s",
-            new_message.chat,
-            new_message.media.file_id,
-        )
-        method = getattr(bot, SEND_METHODS[new_message.media.type], None)
-        if not method:
-            raise ValueError(
-                f"AttachmentType {new_message.media.type} is not supported",
-            )
-        return await method(
-            new_message.chat.id,
-            await self.get_media_source(new_message.media, bot),
-            message_thread_id=new_message.thread_id,
-            business_connection_id=new_message.business_connection_id,
-            caption=new_message.text,
-            reply_markup=new_message.reply_markup,
-            parse_mode=new_message.parse_mode,
-            protect_content=new_message.protect_content,
-            **new_message.media.kwargs,
-        )
+        return result.message

@@ -3,8 +3,8 @@ from typing import Any, Literal
 from maxo.bot.methods import CallbackAnswer
 from maxo.types import (
     Callback,
-    Chat,
     Message,
+    Recipient,
     User,
 )
 
@@ -23,5 +23,5 @@ class FakeUser(User):
     fake: Literal[True] = True
 
 
-class FakeChat(Chat):
+class FakeRecipient(Recipient):
     fake: Literal[True] = True

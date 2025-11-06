@@ -1,5 +1,6 @@
 from typing import Any, Final
 
+from maxo.enums import ChatType
 from maxo.omit import is_defined
 from maxo.routing.ctx import Ctx
 from maxo.routing.interfaces.middleware import BaseMiddleware, NextMiddleware
@@ -72,4 +73,5 @@ class UpdateContextMiddleware(BaseMiddleware[Update[Any]]):
         return UpdateContext(
             chat_id=chat_id,
             user_id=user_id,
+            type=ChatType.DIALOG,
         )

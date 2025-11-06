@@ -19,8 +19,8 @@ from maxo.bot.bot import Bot
 from maxo.fsm.manager import FSMContext
 from maxo.fsm.storages.base import BaseStorage, RawState
 from maxo.routing.ctx import Ctx
+from maxo.routing.dispatcher import Dispatcher
 from maxo.routing.updates.base import BaseUpdate
-from maxo.tools.dispatcher import Dispatcher
 from maxo.types.update_context import UpdateContext
 
 _ReturnT = TypeVar("_ReturnT")

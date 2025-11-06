@@ -2,7 +2,7 @@ import dataclasses
 from collections.abc import Callable
 from typing import Any, Optional, Union
 
-from maxo.types import Callback
+from maxo.routing.updates import MessageCallback
 from maxo_dialog.api.internal import RawKeyboard, Widget
 from maxo_dialog.api.protocols import (
     DialogManager,
@@ -64,9 +64,9 @@ class ListGroup(Keyboard):
             b_kbd = await b.render_keyboard(data, sub_manager)
             for row in b_kbd:
                 for btn in row:
-                    if btn.callback_data:
-                        btn.callback_data = self._item_callback_data(
-                            f"{item_id}:{btn.callback_data}",
+                    if btn.payload:
+                        btn.payload = self._item_payload(
+                            f"{item_id}:{btn.payload}",
                         )
             kbd.extend(b_kbd)
         return kbd
@@ -82,13 +82,16 @@ class ListGroup(Keyboard):
 
     async def _process_item_callback(
         self,
-        callback: Callback,
+        callback: MessageCallback,
         data: str,
         dialog: DialogProtocol,
         manager: DialogManager,
     ) -> bool:
-        item_id, callback_data = data.split(":", maxsplit=1)
-        callback = dataclasses.replace(callback, payload=callback_data)
+        item_id, payload = data.split(":", maxsplit=1)
+
+        cleaned_callback = dataclasses.replace(callback.callback, payload=payload)
+        cleaned_event = dataclasses.replace(callback, callback=cleaned_callback)
+
         sub_manager = SubManager(
             widget=self,
             manager=manager,
@@ -96,8 +99,9 @@ class ListGroup(Keyboard):
             item_id=item_id,
         )
         for b in self.buttons:
-            if await b.process_callback(callback, dialog, sub_manager):
+            if await b.process_callback(cleaned_event, dialog, sub_manager):
                 return True
+        return False
 
     def managed(self, manager: DialogManager) -> "ManagedListGroup":
         return ManagedListGroup(self, manager)

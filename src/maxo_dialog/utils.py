@@ -7,13 +7,13 @@ from maxo.types import (
     CallbackKeyboardButton,
     Chat,
     MessageKeyboardButton,
+    Recipient,
     User,
 )
 from maxo.types.message import Message
 from maxo_dialog.api.entities import (
     ChatEvent,
     DialogUpdateEvent,
-    MediaId,
 )
 from maxo_dialog.api.internal import RawKeyboard
 
@@ -59,8 +59,8 @@ def _decode_reply_callback_byte(little: str, big: str) -> int:
     ) + REPLY_CALLBACK_SYMBOLS.index(little)
 
 
-def join_reply_callback(text: str, callback_data: str) -> str:
-    return text + encode_reply_callback(callback_data)
+def join_reply_callback(text: str, payload: str) -> str:
+    return text + encode_reply_callback(payload)
 
 
 def split_reply_callback(
@@ -90,12 +90,12 @@ def _transform_to_reply_button(
     #     return KeyboardButton(text=button.text, web_app=button.web_app)
     if not button.payload:
         raise ValueError(
-            "Cannot convert inline button without callback_data or web_app",
+            "Cannot convert inline button without payload or web_app",
         )
     return MessageKeyboardButton(
         text=join_reply_callback(
             text=button.text,
-            callback_data=button.payload,
+            payload=button.payload,
         )
     )
 
@@ -127,13 +127,13 @@ def get_chat(event: ChatEvent) -> Chat:
         raise TypeError
 
 
-def is_chat_loaded(chat: Chat) -> bool:
+def is_recipient_loaded(recipient: Recipient) -> bool:
     """
     Check if chat is correctly loaded from telegram.
 
     For internal events it can be created with no data inside as a FakeChat
     """
-    return not getattr(chat, "fake", False)
+    return not getattr(recipient, "fake", False)
 
 
 def is_user_loaded(user: User) -> bool:
@@ -145,47 +145,30 @@ def is_user_loaded(user: User) -> bool:
     return not getattr(user, "fake", False)
 
 
-def get_media_id(message: Message) -> Optional[MediaId]:
-    media = (
-        message.audio
-        or message.animation
-        or message.document
-        or (message.photo[-1] if message.photo else None)
-        or message.video
-        or message.voice
-    )
-    if not media:
-        return None
-    return MediaId(
-        file_id=media.file_id,
-        file_unique_id=media.file_unique_id,
-    )
-
-
-def intent_callback_data(
+def intent_payload(
     intent_id: str,
-    callback_data: Optional[str],
+    payload: Optional[str],
 ) -> Optional[str]:
-    if callback_data is None:
+    if payload is None:
         return None
     prefix = intent_id + CB_SEP
-    if callback_data.startswith(prefix):
-        return callback_data
-    return prefix + callback_data
+    if payload.startswith(prefix):
+        return payload
+    return prefix + payload
 
 
 def add_intent_id(keyboard: RawKeyboard, intent_id: str):
     for row in keyboard:
         for button in row:
             if isinstance(button, CallbackKeyboardButton):
-                button.payload = intent_callback_data(
+                button.payload = intent_payload(
                     intent_id,
                     button.payload,
                 )
 
 
-def remove_intent_id(callback_data: str) -> tuple[Optional[str], str]:
-    if CB_SEP in callback_data:
-        intent_id, new_data = callback_data.split(CB_SEP, maxsplit=1)
+def remove_intent_id(payload: str) -> tuple[Optional[str], str]:
+    if CB_SEP in payload:
+        intent_id, new_data = payload.split(CB_SEP, maxsplit=1)
         return intent_id, new_data
-    return None, callback_data
+    return None, payload

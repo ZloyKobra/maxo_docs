@@ -1,13 +1,20 @@
-from collections.abc import Awaitable, Callable
 from logging import getLogger
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 from maxo.fsm.storages.base import BaseEventIsolation, BaseStorage
-from maxo.routing.interfaces import BaseMiddleware, Router
+from maxo.routing.ctx import Ctx
+from maxo.routing.interfaces import BaseMiddleware, NextMiddleware, Router
+from maxo.routing.middlewares.event_context import (
+    EVENT_FROM_USER_KEY,
+    UPDATE_CONTEXT_KEY,
+)
 from maxo.routing.sentinels import UNHANDLED
 from maxo.routing.signals.exception import ExceptionEvent
-from maxo.tools.facades import MessageCallbackFacade, MessageCreatedFacade
-from maxo.types import Callback, Message
+from maxo.routing.updates.base import MaxUpdate
+from maxo.routing.updates.message_callback import MessageCallback
+from maxo.routing.updates.message_created import MessageCreated
+from maxo.tools.facades import MessageCallbackFacade
+from maxo.types import Message
 from maxo_dialog.api.entities import (
     DEFAULT_STACK_ID,
     EVENT_CONTEXT_KEY,
@@ -25,9 +32,7 @@ from maxo_dialog.api.exceptions import (
     UnknownState,
 )
 from maxo_dialog.api.internal import (
-    CALLBACK_DATA_KEY,
     CONTEXT_KEY,
-    EVENT_SIMULATED,
     STACK_KEY,
     STORAGE_KEY,
     ReplyCallback,
@@ -45,41 +50,51 @@ logger = getLogger(__name__)
 FORBIDDEN_STACK_KEY = "aiogd_stack_forbidden"
 
 
-def event_context_from_callback(event: MessageCallbackFacade) -> EventContext:
+def event_context_from_callback(event: MessageCallback, ctx: Ctx) -> EventContext:
     return EventContext(
-        bot=event.bot,
+        bot=ctx.bot,
         user=event.callback.user,
-        chat=event.callback.user,  # TODO: ???
+        user_id=event.callback.user.user_id,
+        chat_id=event.unsafe_message.recipient.chat_id,
+        chat=None,
+        chat_type=event.unsafe_message.recipient.chat_type,
     )
 
 
-def event_context_from_message(event: MessageCreatedFacade) -> EventContext:
+def event_context_from_message(event: MessageCreated, ctx: Ctx) -> EventContext:
     return EventContext(
-        bot=event.bot,
+        bot=ctx.bot,
         user=event.message.sender,
-        chat=event.chat,  # TODO: ???
+        user_id=event.message.sender.user_id,
+        chat=None,
+        chat_id=event.message.recipient.chat_id,
+        chat_type=event.message.recipient.chat_type,
     )
 
 
 def event_context_from_aiogd(event: DialogUpdateEvent) -> EventContext:
     return EventContext(
         bot=event.bot,
-        user=event.from_user,
+        user=event.sender,
+        user_id=event.sender.user_id,
         chat=event.chat,
+        chat_id=event.chat.chat_id,
+        chat_type=event.chat.type,
     )
 
 
-def event_context_from_error(event: ExceptionEvent) -> EventContext:
+def event_context_from_error(event: ExceptionEvent, ctx: Ctx) -> EventContext:
     # TODO: ???
-    if event.update.message:
-        return event_context_from_message(event.update.message)
-    elif event.update.callback:
-        return event_context_from_callback(event.update.callback_query)
+    if isinstance(event.update, MessageCreated):
+        return event_context_from_message(event.update, ctx)
+    elif isinstance(event.update, MessageCallback):
+        return event_context_from_callback(event.update, ctx)
     elif isinstance(event.update, DialogUpdate) and event.update.aiogd_update:
         return event_context_from_aiogd(event.update.aiogd_update)
     raise ValueError("Unsupported event type in ErrorEvent.update")
 
 
+# TODO: Починить все функции
 class IntentMiddlewareFactory:
     def __init__(
         self,
@@ -103,10 +118,10 @@ class IntentMiddlewareFactory:
             events_isolation=self.events_isolation,
             state_groups=self.registry.states_groups(),
             user_id=event_context.user.id,
-            chat_id=event_context.chat.id,
+            chat_id=event_context.chat_id,
         )
 
-    def _check_outdated(self, intent_id: str, stack: Stack):
+    def _check_outdated(self, intent_id: str, stack: Stack) -> None:
         """Check if intent id is outdated for stack."""
         if stack.empty():
             raise OutdatedIntent(
@@ -124,7 +139,7 @@ class IntentMiddlewareFactory:
         event: ChatEvent,
         stack_id: Optional[str],
         proxy: StorageProxy,
-        data: dict,
+        ctx: Ctx,
     ) -> Optional[Stack]:
         if stack_id is None:
             raise InvalidStackIdError("Both stack id and intent id are None")
@@ -135,16 +150,15 @@ class IntentMiddlewareFactory:
         event: ChatEvent,
         proxy: StorageProxy,
         stack_id: Optional[str],
-        data: dict,
+        ctx: Ctx,
     ) -> None:
         logger.debug(
-            "Loading context for stack: " "`%s`, user: `%s`, chat: `%s`, thread: `%s`",
+            "Loading context for stack: " "`%s`, user: `%s`, chat: `%s`",
             stack_id,
             proxy.user_id,
             proxy.chat_id,
-            proxy.thread_id,
         )
-        stack = await self._load_stack(event, stack_id, proxy, data)
+        stack = await self._load_stack(event, stack_id, proxy, ctx)
         if not stack:
             return
         if stack.empty():
@@ -160,26 +174,27 @@ class IntentMiddlewareFactory:
             stack,
             context,
             event,
-            data,
+            ctx,
         ):
             logger.debug(
                 "Stack %s is not allowed for user %s",
                 stack.id,
                 proxy.user_id,
             )
-            data[FORBIDDEN_STACK_KEY] = True
+            setattr(ctx, FORBIDDEN_STACK_KEY, True)
             await proxy.unlock()
             return
-        data[STORAGE_KEY] = proxy
-        data[STACK_KEY] = stack
-        data[CONTEXT_KEY] = context
+
+        setattr(ctx, STORAGE_KEY, proxy)
+        setattr(ctx, STACK_KEY, stack)
+        setattr(ctx, CONTEXT_KEY, context)
 
     async def _load_context_by_intent(
         self,
         event: ChatEvent,
         proxy: StorageProxy,
         intent_id: Optional[str],
-        data: dict,
+        ctx: Ctx,
     ) -> None:
         logger.debug(
             "Loading context for intent: `%s`, user: `%s`, chat: `%s`",
@@ -188,7 +203,7 @@ class IntentMiddlewareFactory:
             proxy.chat_id,
         )
         context = await proxy.load_context(intent_id)
-        stack = await self._load_stack(event, context.stack_id, proxy, data)
+        stack = await self._load_stack(event, context.stack_id, proxy, ctx)
         if not stack:
             return
         try:
@@ -201,187 +216,193 @@ class IntentMiddlewareFactory:
             stack,
             context,
             event,
-            data,
+            ctx,
         ):
             logger.debug(
                 "Stack %s is not allowed for user %s",
                 stack.id,
                 proxy.user_id,
             )
-            data[FORBIDDEN_STACK_KEY] = True
+            setattr(ctx, FORBIDDEN_STACK_KEY, True)
             await proxy.unlock()
             return
-        data[STORAGE_KEY] = proxy
-        data[STACK_KEY] = stack
-        data[CONTEXT_KEY] = context
+
+        setattr(ctx, STORAGE_KEY, proxy)
+        setattr(ctx, STACK_KEY, stack)
+        setattr(ctx, CONTEXT_KEY, context)
 
     async def _load_default_context(
         self,
         event: ChatEvent,
-        data: dict,
+        ctx: Ctx,
         event_context: EventContext,
     ) -> None:
         return await self._load_context_by_stack(
             event=event,
-            proxy=self.storage_proxy(event_context, data["fsm_storage"]),
+            proxy=self.storage_proxy(event_context, ctx.fsm_storage),
             stack_id=DEFAULT_STACK_ID,
-            data=data,
+            ctx=ctx,
         )
 
     def _intent_id_from_reply(
         self,
-        event: Message,
-        data: dict,
+        event: MessageCreated,
+        ctx: Ctx,
     ) -> Optional[str]:
         if not (
-            event.reply_to_message
-            and event.reply_to_message.from_user.id == data["bot"].id
-            and event.reply_to_message.reply_markup
-            and event.reply_to_message.reply_markup.inline_keyboard
+            event.message.link
+            and event.message.link.sender.id == ctx.bot.state.info.user_id
+            and event.message.link.message.reply_markup.buttons
         ):
             return None
-        for row in event.reply_to_message.reply_markup.inline_keyboard:
+        for row in event.message.link.message.reply_markup.buttons:
             for button in row:
-                if button.callback_data:
-                    intent_id, _ = remove_intent_id(button.callback_data)
+                if getattr(button, "payload", None):
+                    intent_id, _ = remove_intent_id(button.payload)
                     return intent_id
         return None
 
     async def process_message(
         self,
-        handler: Callable,
-        event: Message,
-        data: dict,
-    ):
-        event_context = event_context_from_message(event)
-        data[EVENT_CONTEXT_KEY] = event_context
+        update: MessageCreated,
+        ctx: Ctx,
+        next: NextMiddleware,
+    ) -> Any:
+        event_context = event_context_from_message(update, ctx)
+        setattr(ctx, EVENT_CONTEXT_KEY, event_context)
 
-        text, callback_data = split_reply_callback(event.text)
-        if callback_data:
+        text, payload = split_reply_callback(update.message.unsafe_body.text)
+        if payload:
+            # FIXME
             query = ReplyCallback(
                 id="",
                 message=Message(
-                    chat=event.chat,
-                    message_id=event.message_id,
+                    chat=update.message.chat,
+                    message_id=update.message.message_id,
                 ),
-                original_message=event,
-                data=callback_data,
-                from_user=event.from_user,
+                original_message=update,
+                data=payload,
+                from_user=update.message.from_user,
                 # we cannot know real chat instance
-                chat_instance=str(event.chat.id),
-            ).as_(data["bot"])
-            router: Router = data["event_router"]
-            return await router.propagate_event(
-                "callback_query",
-                query,
-                **{EVENT_SIMULATED: True},
-                **data,
-            )
+                chat_instance=str(update.message.chat.id),
+            ).as_(ctx.bot)
+            router: Router = ctx.event_router
+            return await router.trigger(ctx)
 
-        if intent_id := self._intent_id_from_reply(event, data):
+        if intent_id := self._intent_id_from_reply(update, ctx):
             await self._load_context_by_intent(
-                event=event,
-                proxy=self.storage_proxy(event_context, data["fsm_storage"]),
+                event=update,
+                proxy=self.storage_proxy(event_context, ctx.fsm_storage),
                 intent_id=intent_id,
-                data=data,
+                ctx=ctx,
             )
         else:
-            await self._load_default_context(event, data, event_context)
-        return await handler(event, data)
+            await self._load_default_context(update, ctx, event_context)
+        return await next(ctx)
 
     async def process_aiogd_update(
         self,
-        handler: Callable,
-        event: DialogUpdateEvent,
-        data: dict,
-    ):
-        event_context = event_context_from_aiogd(event)
-        data[EVENT_CONTEXT_KEY] = event_context
+        update: DialogUpdateEvent,
+        ctx: Ctx,
+        next: NextMiddleware,
+    ) -> Any:
+        event_context = event_context_from_aiogd(update)
+        setattr(ctx, EVENT_CONTEXT_KEY, event_context)
 
-        if event.intent_id:
+        if update.intent_id:
             await self._load_context_by_intent(
-                event=event,
-                proxy=self.storage_proxy(event_context, data["fsm_storage"]),
-                intent_id=event.intent_id,
-                data=data,
+                event=update,
+                proxy=self.storage_proxy(event_context, ctx.fsm_storage),
+                intent_id=update.intent_id,
+                ctx=ctx,
             )
         else:
             await self._load_context_by_stack(
-                event=event,
-                proxy=self.storage_proxy(event_context, data["fsm_storage"]),
-                stack_id=event.stack_id,
-                data=data,
+                event=update,
+                proxy=self.storage_proxy(event_context, ctx.fsm_storage),
+                stack_id=update.stack_id,
+                ctx=ctx,
             )
-        return await handler(event, data)
+        return await next(ctx)
 
-    async def process_callback_query(
+    async def process_callback(
         self,
-        handler: Callable,
-        event: Callback,
-        data: dict,
-    ):
-        if "event_chat" not in data:
-            return await handler(event, data)
+        update: MessageCallback,
+        ctx: Ctx,
+        next: NextMiddleware,
+    ) -> Any:
+        if not hasattr(ctx, UPDATE_CONTEXT_KEY):
+            return await next(ctx)
 
-        event_context = event_context_from_callback(event)
-        data[EVENT_CONTEXT_KEY] = event_context
-        original_data = event.payload
-        if event.payload:
-            intent_id, callback_data = remove_intent_id(event.payload)
+        event_context = event_context_from_callback(update, ctx)
+        setattr(ctx, EVENT_CONTEXT_KEY, event_context)
+        original_data = update.callback.payload
+        if original_data:
+            intent_id, payload = remove_intent_id(original_data)
             if intent_id:
                 await self._load_context_by_intent(
-                    event=event,
-                    proxy=self.storage_proxy(event_context, data["fsm_storage"]),
+                    event=update,
+                    proxy=self.storage_proxy(event_context, ctx.fsm_storage),
                     intent_id=intent_id,
-                    data=data,
+                    ctx=ctx,
                 )
             else:
-                await self._load_default_context(event, data, event_context)
-            data[CALLBACK_DATA_KEY] = original_data
+                await self._load_default_context(update, ctx, event_context)
+            ctx.payload = original_data
         else:
-            await self._load_default_context(event, data, event_context)
-        result = await handler(event, data)
-        if result is UNHANDLED and data.get(FORBIDDEN_STACK_KEY):
-            await event.answer()
+            await self._load_default_context(update, ctx, event_context)
+        result = await next(ctx)
+        if result is UNHANDLED and getattr(ctx, FORBIDDEN_STACK_KEY, False):
+            facade = cast(MessageCallbackFacade, ctx.facade)
+            await facade.callback_answer(notification="")
         return result
 
 
-SUPPORTED_ERROR_EVENTS = {
-    "message",
-    "callback_query",
-    "my_chat_member",
-    "aiogd_update",
-    "chat_join_request",
-    "business_message",
-}
+SUPPORTED_ERROR_EVENTS = (
+    MessageCreated,
+    MessageCallback,
+    # BotRemoved,
+    # BotAdded,
+    # UserAdded,
+    # UserRemoved,
+    DialogUpdateEvent,
+)
 
 
-async def context_saver_middleware(handler, event, data):
-    result = await handler(event, data)
-    proxy: StorageProxy = data.pop(STORAGE_KEY, None)
+async def context_saver_middleware(
+    update: MaxUpdate,
+    ctx: Ctx,
+    next: NextMiddleware,
+) -> Any:
+    result = await next(ctx)
+    proxy: StorageProxy = getattr(ctx, STORAGE_KEY, None)
     if proxy:
-        await proxy.save_context(data.pop(CONTEXT_KEY))
-        await proxy.save_stack(data.pop(STACK_KEY))
+        await proxy.save_context(getattr(ctx, CONTEXT_KEY, None))
+        await proxy.save_stack(getattr(ctx, STACK_KEY, None))
     return result
 
 
-async def context_unlocker_middleware(handler, event, data):
-    proxy: StorageProxy = data.get(STORAGE_KEY, None)
+async def context_unlocker_middleware(
+    update: MaxUpdate,
+    ctx: Ctx,
+    next: NextMiddleware,
+) -> Any:
+    proxy: StorageProxy = getattr(ctx, STORAGE_KEY, None)
     try:
-        result = await handler(event, data)
+        result = await next(ctx)
     finally:
         if proxy:
             await proxy.unlock()
     return result
 
 
-class IntentErrorMiddleware(BaseMiddleware):
+class IntentErrorMiddleware(BaseMiddleware[ExceptionEvent]):
     def __init__(
         self,
         registry: DialogRegistryProtocol,
         access_validator: StackAccessValidator,
         events_isolation: BaseEventIsolation,
-    ):
+    ) -> None:
         super().__init__()
         self.registry = registry
         self.events_isolation = events_isolation
@@ -389,16 +410,16 @@ class IntentErrorMiddleware(BaseMiddleware):
 
     def _is_error_supported(
         self,
-        event: ExceptionEvent,
-        data: dict[str, Any],
+        update: ExceptionEvent,
+        ctx: Ctx,
     ) -> bool:
-        if isinstance(event, InvalidStackIdError):
+        if isinstance(update, InvalidStackIdError):
             return False
-        if event.update.event_type not in SUPPORTED_ERROR_EVENTS:
+        if not isinstance(update.update, SUPPORTED_ERROR_EVENTS):
             return False
-        if "event_chat" not in data:
+        if not hasattr(ctx, UPDATE_CONTEXT_KEY):
             return False
-        if "event_from_user" not in data:
+        if not hasattr(ctx, EVENT_FROM_USER_KEY):
             return False
         return True
 
@@ -439,32 +460,27 @@ class IntentErrorMiddleware(BaseMiddleware):
 
     async def __call__(
         self,
-        handler: Callable[
-            [ExceptionEvent, dict[str, Any]],
-            Awaitable[Any],
-        ],
-        event: ExceptionEvent,
-        data: dict[str, Any],
+        update: ExceptionEvent,
+        ctx: Ctx,
+        next: NextMiddleware,
     ) -> Any:
-        error = event.exception
-        if not self._is_error_supported(event, data):
-            return await handler(event, data)
+        error = update.error
+        if not self._is_error_supported(update, ctx):
+            return await next(ctx)
 
         try:
-            event_context = event_context_from_error(event)
-            data[EVENT_CONTEXT_KEY] = event_context
+            event_context = event_context_from_error(update)
+            setattr(ctx, EVENT_CONTEXT_KEY, event_context)
             proxy = StorageProxy(
                 bot=event_context.bot,
-                storage=data["fsm_storage"],
+                storage=ctx.fsm_storage,
                 events_isolation=self.events_isolation,
                 state_groups=self.registry.states_groups(),
                 user_id=event_context.user.id,
-                chat_id=event_context.chat.id,
-                thread_id=event_context.thread_id,
-                business_connection_id=event_context.business_connection_id,
+                chat_id=event_context.chat_id,
             )
-            data[STORAGE_KEY] = proxy
-            stack = await self._load_stack(proxy, event)
+            setattr(ctx, STORAGE_KEY, proxy)
+            stack = await self._load_stack(proxy, update.error)
             if stack.empty() or isinstance(error, UnknownState):
                 context = None
             else:
@@ -476,26 +492,25 @@ class IntentErrorMiddleware(BaseMiddleware):
             if await self.access_validator.is_allowed(
                 stack,
                 context,
-                event.update.event,
-                data,
+                update.update.update,
+                ctx,
             ):
-                data[STACK_KEY] = stack
-                data[CONTEXT_KEY] = context
+                setattr(ctx, STACK_KEY, stack)
+                setattr(ctx, CONTEXT_KEY, context)
             else:
                 logger.debug(
                     "Stack %s is not allowed for user %s",
                     stack.id,
                     proxy.user_id,
                 )
-                data[FORBIDDEN_STACK_KEY] = True
-                del data[STORAGE_KEY]
+                setattr(ctx, FORBIDDEN_STACK_KEY, True)
                 await proxy.unlock()
-            return await handler(event, data)
+            return await next(ctx)
         finally:
-            proxy: StorageProxy = data.pop(STORAGE_KEY, None)
+            proxy: StorageProxy = getattr(ctx, STORAGE_KEY, None)
             if proxy:
                 await proxy.unlock()
-                context = data.pop(CONTEXT_KEY)
+                context = getattr(ctx, CONTEXT_KEY, None)
                 if context is not None:
                     await proxy.save_context(context)
-                await proxy.save_stack(data.pop(STACK_KEY))
+                await proxy.save_stack(getattr(ctx, STACK_KEY, None))
