@@ -1,6 +1,5 @@
 import asyncio
 import contextlib
-import logging
 from typing import Any, AsyncIterator, Sequence
 
 from maxo import loggers
@@ -91,7 +90,6 @@ class LongPolling:
                 with contextlib.suppress(KeyboardInterrupt):
                     async with asyncio.TaskGroup() as tg:
                         async for update in updates_poller:
-                            logging.debug("New update: %s", update)
                             tg.create_task(dispatcher.feed_max_update(update, bot))
 
                 await dispatcher.feed_signal(BeforeShutdown(), bot)
@@ -153,6 +151,7 @@ class LongPolling:
                 failed = False
 
             for update in result.updates:
+                loggers.long_polling.debug("New update: %s", update)
                 yield Update(update=update, marker=result.marker)
 
             marker = result.marker

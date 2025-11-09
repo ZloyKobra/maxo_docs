@@ -13,7 +13,7 @@ from maxo.enums import ChatType
 from maxo.fsm import State, StatesGroup
 from maxo.routing.ctx import Ctx
 from maxo.routing.interfaces import BaseRouter
-from maxo.routing.middlewares.event_context import UPDATE_CONTEXT_KEY
+from maxo.routing.middlewares.update_context import UPDATE_CONTEXT_KEY
 from maxo.routing.updates import MessageCallback
 from maxo.types import Callback
 from maxo.types.message import Message

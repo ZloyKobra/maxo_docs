@@ -38,7 +38,6 @@ class MessageMethodsFacade(BaseMethodsFacade, ABC):
         notify: Omittable[bool] = True,
         format: TextFormat | None = None,
         disable_link_preview: Omittable[bool] = Omitted(),
-        attachments: Sequence[AttachmentsRequests] | None = None,
         keyboard: Sequence[Sequence[KeyboardButtons]] | None = None,
         media: Sequence[InputFile] | None = None,
     ) -> Message:
@@ -49,16 +48,13 @@ class MessageMethodsFacade(BaseMethodsFacade, ABC):
             chat_type=recipient.chat_type,
         )
 
-        new_attachments = list(attachments) if attachments is not None else []
-
-        if keyboard:
-            new_attachments.append(InlineKeyboardAttachmentRequest.factory(keyboard))
+        attachments = self._build_attachments(base=[], keyboard=keyboard, media=media)
 
         result = await self.bot.send_message(
             chat_id=chat_id or Omitted(),
             user_id=user_id or Omitted(),
             text=text,
-            attachments=new_attachments,
+            attachments=attachments,
             link=link,
             notify=notify,
             format=format,

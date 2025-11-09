@@ -43,7 +43,7 @@ class NewMessage:
     @property
     def keyboard(self) -> Sequence[Sequence[KeyboardButtons]]:
         if not self.attachments:
-            return None
+            return []
         for attachment in self.attachments:
             if isinstance(attachment, InlineKeyboardAttachmentRequest):
                 return attachment.payload.buttons

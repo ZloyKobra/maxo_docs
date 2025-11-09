@@ -17,7 +17,7 @@ from maxo.routing.sentinels import UNHANDLED
 from maxo.routing.signals.base import BaseSignal
 from maxo.routing.signals.update import Update
 from maxo.routing.updates.base import BaseUpdate
-from maxo.routing.utils._resolving_inner_middlewares import resolving_inner_middlewares
+from maxo.routing.utils._resolving_inner_middlewares import resolve_middlewares
 from maxo.routing.utils.validate_router_graph import validate_router_graph
 from maxo.tools.facades.middleware import FacadeMiddleware
 
@@ -109,6 +109,6 @@ class Dispatcher(Router):
 
     async def _emit_before_startup_handler(self) -> None:
         validate_router_graph(self)
-        resolving_inner_middlewares(self)
+        resolve_middlewares(self)
 
         await super()._emit_before_startup_handler()

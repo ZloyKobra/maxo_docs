@@ -5,7 +5,8 @@ from maxo.routing.interfaces.middleware import BaseMiddleware, NextMiddleware
 from maxo.routing.signals.update import Update
 from maxo.types import User
 
-UPDATE_CONTEXT_KEY = "update_context"
+# TODO: Объединить с UpdateContextMiddleware
+
 EVENT_FROM_USER_KEY = "event_from_user"
 
 

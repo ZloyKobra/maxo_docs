@@ -17,7 +17,7 @@ from maxo.routing.updates.user_added import UserAdded
 from maxo.routing.updates.user_removed import UserRemoved
 from maxo.types.update_context import UpdateContext
 
-UPDATE_CONTEXT_ATTR: Final = "update_context"
+UPDATE_CONTEXT_KEY: Final = "update_context"
 
 
 class UpdateContextMiddleware(BaseMiddleware[Update[Any]]):
@@ -28,7 +28,7 @@ class UpdateContextMiddleware(BaseMiddleware[Update[Any]]):
         next: NextMiddleware[Update[Any]],
     ) -> Any:
         update_context = self._resolve_update_context(update.update)
-        ctx[UPDATE_CONTEXT_ATTR] = update_context
+        ctx[UPDATE_CONTEXT_KEY] = update_context
 
         return await next(ctx)
 

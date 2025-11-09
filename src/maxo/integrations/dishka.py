@@ -1,18 +1,23 @@
 __all__ = ("CONTAINER_NAME", "MaxoProvider", "inject", "setup_dishka")
 
-from typing import Any, Callable, Concatenate, ParamSpec, TypeVar, overload
+from collections.abc import Container, Generator
+from functools import partial
+from inspect import Parameter, signature
+from typing import Any, ParamSpec, TypeVar, overload
 
 from dishka import AsyncContainer
 
 from maxo.routing.handlers.signal import SignalHandlerFn
-from maxo.routing.handlers.update import UpdateHandlerFn
+from maxo.routing.handlers.update import UpdateHandler, UpdateHandlerFn
+from maxo.routing.interfaces import BaseRouter
 from maxo.routing.interfaces.middleware import BaseMiddleware, NextMiddleware
+from maxo.routing.observers import UpdateObserver
 from maxo.routing.signals.base import BaseSignal
 from maxo.routing.signals.update import Update
 
 try:
     from dishka import Provider, Scope, from_context
-    from dishka.integrations.base import wrap_injection
+    from dishka.integrations.base import is_dishka_injected, wrap_injection
 except ImportError as e:
     e.add_note(" * Please run `pip install maxo[dishka]`")
     raise
@@ -47,15 +52,27 @@ def inject(
 # FIXME
 @overload
 def inject(
-    func, # : _UpdateHandlerFn[_UpdateT, _ParamsP, _ReturnT],
+    func,  # : _UpdateHandlerFn[_UpdateT, _ParamsP, _ReturnT],
 ) -> UpdateHandlerFn[_UpdateT, _ReturnT]: ...
 
 
-def inject(func: Any) -> Any:
+def inject(func):
+    if CONTAINER_NAME in signature(func).parameters:
+        additional_params = []
+    else:
+        additional_params = [
+            Parameter(
+                name=CONTAINER_NAME,
+                annotation=Container,
+                kind=Parameter.KEYWORD_ONLY,
+            )
+        ]
+
     return wrap_injection(
         func=func,
         is_async=True,
-        container_getter=lambda args, kwargs: kwargs["ctx"][CONTAINER_NAME],
+        additional_params=additional_params,
+        container_getter=lambda args, kwargs: kwargs[CONTAINER_NAME],
     )
 
 
@@ -69,12 +86,49 @@ def setup_dishka(
         DishkaMiddleware(container, extra_context),
     )
 
+    if auto_inject:
+        callback = partial(inject_router, router=dispatcher)
+        dispatcher.before_startup.handler(callback)
+
+
+def inject_router(router: BaseRouter) -> None:
+    def chain_tail(router: BaseRouter) -> Generator[BaseRouter, None, None]:
+        yield router
+        for child_router in router.children_routers:
+            yield from chain_tail(child_router)
+
+    for sub_router in chain_tail(router):
+        for observer in sub_router.observers.values():
+            if not isinstance(observer, UpdateObserver):
+                continue
+
+            for handler in observer.handlers:
+                if not is_dishka_injected(handler._handler_fn):
+                    inject_handler(handler)
+
+
+def inject_handler(handler: UpdateHandler) -> UpdateHandler:
+    temp_handler = type(handler)(
+        handler_fn=inject(handler._handler_fn),
+        filter=handler._filter,
+    )
+
+    handler._handler_fn = temp_handler._handler_fn
+    handler._filter = temp_handler._filter
+    handler._awaitable = temp_handler._awaitable
+    handler._params = temp_handler._params
+    handler._varkw = temp_handler._varkw
+
+    return handler
+
 
 class DishkaMiddleware(BaseMiddleware[Update[Any]]):
     __slots__ = ("_container", "_extra_context")
 
     def __init__(
-        self, container: AsyncContainer, extra_context: dict[Any, Any] | None = None,
+        self,
+        container: AsyncContainer,
+        extra_context: dict[Any, Any] | None = None,
     ) -> None:
         self._container = container
         self._extra_context = extra_context or {}

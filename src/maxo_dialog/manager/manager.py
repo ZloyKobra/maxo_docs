@@ -8,7 +8,7 @@ from maxo import Ctx
 from maxo.enums import ChatStatusType, ChatType
 from maxo.fsm import State
 from maxo.routing.interfaces import BaseRouter
-from maxo.routing.middlewares.event_context import UPDATE_CONTEXT_KEY
+from maxo.routing.middlewares.update_context import UPDATE_CONTEXT_KEY
 from maxo.routing.signals.exception import ErrorEvent
 from maxo.routing.updates import MessageCallback
 from maxo.types import (
@@ -440,7 +440,7 @@ class ManagerImpl(DialogManager):
 
     def _get_last_message(self) -> Optional[OldMessage]:
         if isinstance(self.event, ErrorEvent):
-            event = self.event.update.event
+            event = self.event.update.update
         else:
             event = self.event
         if isinstance(event, MessageCallback):

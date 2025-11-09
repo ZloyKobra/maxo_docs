@@ -236,7 +236,6 @@ class MessageManager(MessageManagerProtocol):
     ) -> bool:
         try:
             await bot.delete_message(
-                chat_id=old_message.recipient.chat_id,
                 message_id=old_message.message_id,
             )
             return True

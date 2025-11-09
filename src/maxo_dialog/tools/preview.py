@@ -9,10 +9,8 @@ from jinja2 import Environment, PackageLoader, select_autoescape
 from maxo.enums import AttachmentType
 from maxo.fsm import State, StatesGroup
 from maxo.routing.interfaces import BaseRouter
-from maxo.routing.middlewares.event_context import (
-    EVENT_FROM_USER_KEY,
-    UPDATE_CONTEXT_KEY,
-)
+from maxo.routing.middlewares.event_context import EVENT_FROM_USER_KEY
+from maxo.routing.middlewares.update_context import UPDATE_CONTEXT_KEY
 from maxo.types import Callback, CallbackKeyboardButton, Chat, User
 from maxo.types.message import Message
 from maxo_dialog.api.entities import (

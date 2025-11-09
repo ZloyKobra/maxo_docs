@@ -1,4 +1,6 @@
-from inspect import signature
+import asyncio
+import inspect
+from functools import partial
 from typing import Any, Generic, Protocol, TypeVar, runtime_checkable
 
 from maxo.routing.ctx import Ctx
@@ -26,8 +28,11 @@ class UpdateHandler(
     Generic[_UpdateT, _ReturnT_co],
 ):
     __slots__ = (
+        "_awaitable",
         "_filter",
         "_handler_fn",
+        "_params",
+        "_varkw",
     )
 
     def __init__(
@@ -40,6 +45,12 @@ class UpdateHandler(
 
         self._filter = filter
         self._handler_fn = handler_fn
+        self._awaitable = inspect.isawaitable(
+            handler_fn
+        ) or inspect.iscoroutinefunction(handler_fn)
+        spec = inspect.getfullargspec(handler_fn)
+        self._params = {*spec.args, *spec.kwonlyargs}
+        self._varkw = spec.varkw is not None
 
     def __repr__(self) -> str:
         return (
@@ -48,18 +59,17 @@ class UpdateHandler(
         )
 
     def _prepare_kwargs(self, ctx: Ctx) -> dict[str, Any]:
-        spec = signature(self._handler_fn)
-        varkw = any(
-            param.kind == param.VAR_KEYWORD for param in spec.parameters.values()
-        )
+        if self._varkw:
+            return ctx  # type: ignore
 
-        if varkw:
-            return ctx
-
-        return {k: ctx[k] for k in spec.parameters if k in ctx}
+        return {k: ctx[k] for k in self._params if k in ctx}
 
     async def execute_filter(self, ctx: Ctx) -> bool:
         return await self._filter(ctx["update"], ctx)
 
     async def __call__(self, ctx: Ctx) -> _ReturnT_co:
-        return await self._handler_fn(ctx["update"], **self._prepare_kwargs(ctx))
+        update = ctx.pop("update")
+        wrapped = partial(self._handler_fn, update, **self._prepare_kwargs(ctx))
+        if self._awaitable:
+            return await wrapped()
+        return await asyncio.to_thread(wrapped)

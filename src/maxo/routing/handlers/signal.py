@@ -1,4 +1,6 @@
-from inspect import signature
+import asyncio
+import inspect
+from functools import partial
 from typing import Any, Generic, Protocol, TypeVar
 
 from maxo.routing.ctx import Ctx
@@ -20,8 +22,11 @@ class SignalHandler(
     Generic[_SignalT, _ReturnT_co],
 ):
     __slots__ = (
+        "_awaitable",
         "_filter",
-        "handler_fn",
+        "_handler_fn",
+        "_params",
+        "_varkw",
     )
 
     def __init__(
@@ -33,27 +38,31 @@ class SignalHandler(
             filter = AlwaysTrueFilter()
 
         self._filter = filter
-        self.handler_fn = handler_fn
+        self._handler_fn = handler_fn
+        self._awaitable = inspect.isawaitable(
+            handler_fn
+        ) or inspect.iscoroutinefunction(handler_fn)
+        spec = inspect.getfullargspec(handler_fn)
+        self._params = {*spec.args, *spec.kwonlyargs}
+        self._varkw = spec.varkw is not None
 
     def __repr__(self) -> str:
         return (
             f"{self.__class__.__name__}"
-            f"(handler_fn={self.handler_fn}, filter={self._filter})"
+            f"(handler_fn={self._handler_fn}, filter={self._filter})"
         )
 
     def _prepare_kwargs(self, ctx: Ctx) -> dict[str, Any]:
-        spec = signature(self.handler_fn)
-        varkw = any(
-            param.kind == param.VAR_KEYWORD for param in spec.parameters.values()
-        )
+        if self._varkw:
+            return ctx  # type: ignore
 
-        if varkw:
-            return ctx
-
-        return {k: ctx[k] for k in spec.parameters if k in ctx}
+        return {k: ctx[k] for k in self._params if k in ctx}
 
     async def execute_filter(self, ctx: Ctx) -> bool:
         return await self._filter(ctx["update"], ctx)
 
     async def __call__(self, ctx: Ctx) -> _ReturnT_co:
-        return await self.handler_fn(**self._prepare_kwargs(ctx))
+        wrapped = partial(self._handler_fn, **self._prepare_kwargs(ctx))
+        if self._awaitable:
+            return await wrapped()
+        return await asyncio.to_thread(wrapped)

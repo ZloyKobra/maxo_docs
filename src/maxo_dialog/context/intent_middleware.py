@@ -6,8 +6,8 @@ from maxo.routing.ctx import Ctx
 from maxo.routing.interfaces import BaseMiddleware, BaseRouter, NextMiddleware
 from maxo.routing.middlewares.event_context import (
     EVENT_FROM_USER_KEY,
-    UPDATE_CONTEXT_KEY,
 )
+from maxo.routing.middlewares.update_context import UPDATE_CONTEXT_KEY
 from maxo.routing.sentinels import UNHANDLED
 from maxo.routing.signals.exception import ErrorEvent
 from maxo.routing.updates.base import MaxUpdate

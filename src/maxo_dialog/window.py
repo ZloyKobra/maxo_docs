@@ -3,7 +3,7 @@ from logging import getLogger
 from typing import Any, Optional
 
 from maxo.fsm import State
-from maxo.routing.middlewares.event_context import UPDATE_CONTEXT_KEY
+from maxo.routing.middlewares.update_context import UPDATE_CONTEXT_KEY
 from maxo.routing.updates import MessageCallback, MessageCreated
 from maxo.types import (
     InlineKeyboardAttachmentRequest,
@@ -176,6 +176,12 @@ class Window(WindowProtocol):
             logger.error("Cannot get window data for state %s", self.state)
             raise
         try:
+            keyboard = await self.render_kbd(current_data, manager)
+            if any(row for row in keyboard):
+                attachments = [InlineKeyboardAttachmentRequest.factory(keyboard)]
+            else:
+                attachments = []
+
             return NewMessage(
                 recipient=Recipient(
                     chat_type=update_context.chat_type,
@@ -188,11 +194,7 @@ class Window(WindowProtocol):
                     current_data,
                     manager,
                 ),
-                attachments=[
-                    InlineKeyboardAttachmentRequest.factory(
-                        await self.render_kbd(current_data, manager)
-                    )
-                ],
+                attachments=attachments,
             )
         except Exception:
             logger.error("Cannot render window for state %s", self.state)

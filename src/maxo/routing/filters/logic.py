@@ -1,6 +1,6 @@
 from abc import abstractmethod
 from collections.abc import Sequence
-from copy import deepcopy
+from copy import copy
 from typing import Generic, TypeVar, final
 
 from maxo.routing.ctx import Ctx
@@ -19,7 +19,7 @@ class BaseLogicFilter(BaseFilter[_UpdateT], Generic[_UpdateT]):
 
     @final
     async def __call__(self, update: _UpdateT, ctx: Ctx) -> bool:
-        copied_ctx = deepcopy(ctx)
+        copied_ctx = copy(ctx)
 
         reduce_result = await self._reduce(update, ctx)
         if reduce_result:
@@ -49,7 +49,7 @@ class AndFilter(BaseLogicFilter[_UpdateT], Generic[_UpdateT]):
 
     async def _reduce(self, update: _UpdateT, ctx: Ctx) -> bool:
         for filter_ in self._filters:
-            loop_copied_ctx = deepcopy(ctx)
+            loop_copied_ctx = copy(ctx)
 
             filter_result = await filter_(update, loop_copied_ctx)
             if not filter_result:
@@ -84,7 +84,7 @@ class OrFilter(BaseLogicFilter[_UpdateT], Generic[_UpdateT]):
 
     async def _reduce(self, update: _UpdateT, ctx: Ctx) -> bool:
         for filter_ in self._filters:
-            loop_copied_ctx = deepcopy(ctx)
+            loop_copied_ctx = copy(ctx)
 
             filter_result = await filter_(update, loop_copied_ctx)
             if filter_result:
