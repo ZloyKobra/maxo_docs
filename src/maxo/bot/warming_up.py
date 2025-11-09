@@ -1,6 +1,5 @@
 from enum import Enum
 from mailbox import Message
-from tkinter import Image
 from typing import Any, TypeVar, assert_never
 
 from adaptix import Retort
@@ -85,6 +84,7 @@ from maxo.types.contact_attachment_request_payload import (
 from maxo.types.file_attachment import FileAttachment
 from maxo.types.file_attachment_payload import FileAttachmentPayload
 from maxo.types.file_attachment_request import FileAttachmentRequest
+from maxo.types.image import Image
 from maxo.types.image_attachment import ImageAttachment
 from maxo.types.image_attachment_request import ImageAttachmentRequest
 from maxo.types.inline_keyboard_attachment import InlineKeyboardAttachment
