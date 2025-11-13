@@ -283,7 +283,7 @@ class ManagerImpl(DialogManager):
             old_dialog = self.dialog()
             if old_dialog.launch_mode is LaunchMode.EXCLUSIVE:
                 raise ValueError(
-                    "Cannot start dialog on top " "of one with launch_mode==SINGLE",
+                    "Cannot start dialog on top of one with launch_mode==SINGLE",
                 )
 
         new_dialog = self._registry.find_dialog(state)
@@ -512,7 +512,7 @@ class ManagerImpl(DialogManager):
                 return current_chat
         elif chat_id is None:
             raise ValueError(
-                "Explicit `chat_id` is required " "for events without current chat",
+                "Explicit `chat_id` is required for events without current chat",
             )
         return FakeRecipient(
             chat_id=chat_id,

@@ -260,7 +260,6 @@ class Radio(StatefulSelect[T], Generic[T]):
         ] = None,
         when: Optional[Union[str, Callable]] = None,
     ):
-
         super().__init__(
             checked_text=checked_text,
             unchecked_text=unchecked_text,
@@ -400,8 +399,7 @@ class Multiselect(StatefulSelect[T], Generic[T]):
         if manager.is_preview():
             return (
                 # just stupid way to make it differ in preview
-                ord(item_id[-1]) % 2
-                == 1
+                ord(item_id[-1]) % 2 == 1
             )
         return self.is_checked(item_id, manager)
 

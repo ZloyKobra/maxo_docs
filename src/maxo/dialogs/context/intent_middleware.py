@@ -136,12 +136,12 @@ class IntentMiddlewareFactory:
         if stack.empty():
             raise OutdatedIntent(
                 stack.id,
-                f"Outdated intent id ({intent_id}) " f"for stack ({stack.id})",
+                f"Outdated intent id ({intent_id}) for stack ({stack.id})",
             )
         if intent_id != stack.last_intent_id():
             raise OutdatedIntent(
                 stack.id,
-                f"Outdated intent id ({intent_id}) " f"for stack ({stack.id})",
+                f"Outdated intent id ({intent_id}) for stack ({stack.id})",
             )
 
     async def _load_stack(
@@ -161,7 +161,7 @@ class IntentMiddlewareFactory:
         ctx: Ctx,
     ) -> None:
         logger.debug(
-            "Loading context for stack: " "`%s`, user: `%s`, chat: `%s`",
+            "Loading context for stack: `%s`, user: `%s`, chat: `%s`",
             stack_id,
             proxy.user_id,
             proxy.chat_id,

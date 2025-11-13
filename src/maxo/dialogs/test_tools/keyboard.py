@@ -49,7 +49,7 @@ class InlineButtonPositionLocator:
             return None
 
     def __repr__(self) -> str:
-        return f"InlineButtonPositionLocator" f"(row={self.row}, column={self.column})"
+        return f"InlineButtonPositionLocator(row={self.row}, column={self.column})"
 
 
 class InlineButtonDataLocator:

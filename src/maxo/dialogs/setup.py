@@ -64,7 +64,7 @@ class DialogRegistry(DialogRegistryProtocol):
             return self._dialogs[state.group]
         except KeyError as e:
             raise UnregisteredDialogError(
-                f"No dialog found for `{state.group}`" f" (looking by state `{state}`)",
+                f"No dialog found for `{state.group}` (looking by state `{state}`)",
             ) from e
 
     def states_groups(self) -> dict[str, type[StatesGroup]]:

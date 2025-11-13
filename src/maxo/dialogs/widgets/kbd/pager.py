@@ -84,7 +84,6 @@ class SwitchPage(BasePager):
         text: Text,
         when: WhenCondition = None,
     ):
-
         super().__init__(id=id, scroll=scroll, when=when)
         self.page = page
         self.text = text
@@ -116,7 +115,6 @@ class SwitchPage(BasePager):
         current_page: int,
         pages: int,
     ) -> PagerPageData:
-
         return {
             "data": data,
             "target_page": target_page,
