@@ -9,6 +9,7 @@ from maxo.dialogs.widgets.widget_event import (
     WidgetEventProcessor,
     ensure_event_processor,
 )
+from maxo.omit import Omittable, Omitted
 from maxo.routing.updates import MessageCallback
 from maxo.types import CallbackKeyboardButton, LinkKeyboardButton, OpenAppKeyboardButton
 
@@ -58,10 +59,9 @@ class Url(Keyboard):
         self,
         text: Text,
         url: Text,
-        id: Optional[str] = None,
         when: WhenCondition = None,
     ) -> None:
-        super().__init__(id=id, when=when)
+        super().__init__(when=when)
         self.text = text
         self.url = url
 
@@ -88,11 +88,10 @@ class WebApp(Keyboard):
         self,
         text: Text,
         web_app: Text,
-        contact_id: int | None = None,
-        id: Optional[str] = None,
+        contact_id: Omittable[int] = Omitted(),
         when: WhenCondition = None,
     ) -> None:
-        super().__init__(id=id, when=when)
+        super().__init__(when=when)
         self.text = text
         self.web_app = web_app
         self.contact_id = contact_id
